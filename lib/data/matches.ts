@@ -7,7 +7,9 @@ export const MOCK_MATCHES: MatchData[] = [
     teams: { home: 'MAN CITY', away: 'ARSENAL' },
     league: 'Premier League',
     odds: { win: 1.85, draw: 3.50, loss: 4.20 },
-    startTime: '2026-04-12T19:30:00Z'
+    startTime: '2026-04-12T19:30:00Z',
+    isFeatured: true,
+    previewScore: '2:1'
   },
   {
     id: 'm2',
@@ -15,7 +17,9 @@ export const MOCK_MATCHES: MatchData[] = [
     teams: { home: 'REAL MADRID', away: 'BARCELONA' },
     league: 'La Liga',
     odds: { win: 2.10, draw: 3.40, loss: 3.10 },
-    startTime: '2026-04-12T21:00:00Z'
+    startTime: '2026-04-12T21:00:00Z',
+    isFeatured: true,
+    previewScore: '2:2'
   },
   {
     id: 'm3',
@@ -23,7 +27,8 @@ export const MOCK_MATCHES: MatchData[] = [
     teams: { home: 'FC SEOUL', away: 'ULSAN HD' },
     league: 'K League 1',
     odds: { win: 2.75, draw: 3.20, loss: 2.45 },
-    startTime: '2026-04-12T17:00:00Z'
+    startTime: '2026-04-12T17:00:00Z',
+    previewScore: '1:0'
   },
   {
     id: 'm4',
@@ -31,7 +36,8 @@ export const MOCK_MATCHES: MatchData[] = [
     teams: { home: 'BAYERN MUNICH', away: 'LEVERKUSEN' },
     league: 'Bundesliga',
     odds: { win: 1.65, draw: 4.10, loss: 5.50 },
-    startTime: '2026-04-13T02:00:00Z'
+    startTime: '2026-04-13T02:00:00Z',
+    previewScore: '3:1'
   },
   {
     id: 'm5',
@@ -39,6 +45,7 @@ export const MOCK_MATCHES: MatchData[] = [
     teams: { home: 'JEJU UTD', away: 'DAEGU FC' },
     league: 'K League 1',
     odds: { win: 2.30, draw: 3.10, loss: 3.20 },
-    startTime: '2026-04-12T14:30:00Z'
+    startTime: '2026-04-12T14:30:00Z',
+    previewScore: '1:1'
   }
 ];

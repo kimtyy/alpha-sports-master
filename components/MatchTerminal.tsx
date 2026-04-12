@@ -8,12 +8,9 @@ import {
   Clock, AlertTriangle, Trophy, Target, 
   BarChart3, Globe, Star, Loader2, MousePointer2,
   CheckCircle2, Info, Wallet, BarChart, X, Menu,
-  LineChart as LineChartIcon, SlidersHorizontal
+  LineChart as LineChartIcon, SlidersHorizontal,
+  CalendarDays, Flame
 } from 'lucide-react';
-import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, AreaChart, Area
-} from 'recharts';
 import { AgentResult, MatchData } from '@/lib/agents/orchestrator';
 import { MOCK_MATCHES } from '@/lib/data/matches';
 
@@ -32,10 +29,10 @@ export const MatchTerminal: React.FC = () => {
   }, []);
 
   const sysStatus = {
-    version: "v1.2.0-ELITE",
-    network: "Alpha Intelligence Corps",
-    sync: "REAL-TIME",
-    uptime: "99.9%"
+    version: "v2.0.0-PRO",
+    network: "Alpha Int. Network",
+    sync: "LIVE",
+    uptime: "100%"
   };
 
   const filteredMatches = useMemo(() => {
@@ -45,6 +42,21 @@ export const MatchTerminal: React.FC = () => {
       m.league.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [searchQuery]);
+
+  // Grouping logic for the dashboard
+  const groupedMatches = useMemo(() => {
+    const groups: { [key: string]: MatchData[] } = {};
+    filteredMatches.forEach(match => {
+      const dateKey = new Date(match.startTime).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
+      if (!groups[dateKey]) groups[dateKey] = [];
+      groups[dateKey].push(match);
+    });
+    return groups;
+  }, [filteredMatches]);
+
+  const featuredMatch = useMemo(() => {
+    return MOCK_MATCHES.find(m => m.isFeatured) || MOCK_MATCHES[0];
+  }, []);
 
   const consensus = useMemo(() => {
     if (results.length === 0) return null;
@@ -68,7 +80,6 @@ export const MatchTerminal: React.FC = () => {
         throw new Error(json.error);
       }
     } catch (error) {
-       console.warn("[DEMO_MODE] API Unavailable. Activating simulated intelligence protocol.");
        await new Promise(r => setTimeout(r, 2000));
        const demoResults: AgentResult[] = [
          {
@@ -82,7 +93,7 @@ export const MatchTerminal: React.FC = () => {
              "배당 흐름: 해외 주요 오즈메이커들의 배당이 홈팀 우세 방향으로 12% 하락.",
              "전술적 포인트: 상대팀 수비 핵심 부재에 따른 오버 스코어 공략 추천."
            ],
-           predictedScore: "2:0"
+           predictedScore: selectedMatch.previewScore || "2:1"
          }
        ];
        setResults(demoResults);
@@ -100,7 +111,7 @@ export const MatchTerminal: React.FC = () => {
 
   return (
     <div id="terminal-root" className="terminal-container">
-      {/* 0. External Gateway (Sports Toto) */}
+      {/* 0. External Gateway */}
       <div className="gateway-banner">
          <div className="gateway-glow" />
          <a 
@@ -122,37 +133,65 @@ export const MatchTerminal: React.FC = () => {
          </a>
       </div>
 
-      {/* 1. Header */}
+      {/* 1. Header - Updated Branding */}
       <header className="terminal-header">
          <div className="header-brand">
             <div className="brand-logo">
-               <Trophy size={32} color="#00e676" />
+               <Trophy size={40} color="#00e676" />
             </div>
             <div>
-               <h1 className="brand-name">Alpha <span>Master</span></h1>
-               <p className="brand-tagline">지능형 전술 운영 체제 // Tactical Intelligence OS</p>
+               <h1 className="brand-name">Alpha <span>Sports Master</span></h1>
+               <p className="brand-tagline">지능형 전술 운영 체제 // Intelligence Dashboard OS</p>
             </div>
          </div>
-         <div className="sys-stats">
+         <div className="sys-stats lg-only">
             <div className="stat-pill">
                <div className="status-dot" />
-               <span>데이터 동기화 중 // Syncing</span>
+               <span>정상 작동 중 // Operational</span>
             </div>
             <div className="stat-data">
-               <span>실시간 리포트: {sysStatus.sync}</span>
                <span>Ver: {sysStatus.version}</span>
             </div>
          </div>
       </header>
 
       <main className="terminal-main">
-         {/* PANEL A: TARGET SELECTION */}
+         {/* PANEL A: DASHBOARD VIEW (Formerly Target Selection) */}
          <aside className={`panel-a ${activeTab === 'matches' ? 'active' : ''}`}>
-            <div className="panel-header">
-               <Target size={14} opacity={0.3} />
-               <h2>시장 분석 타겟 // Market Targets</h2>
+            {/* Spotlight Section */}
+            <section className="spotlight-section">
+               <div className="section-title">
+                  <Flame size={16} color="#ff3d00" />
+                  <span>이주의 추천 경기 // Weekly Spotlight</span>
+               </div>
+               <div 
+                 className="spotlight-card"
+                 onClick={() => {
+                   setSelectedMatch(featuredMatch);
+                   setActiveTab('analysis');
+                 }}
+               >
+                  <div className="spotlight-bg" />
+                  <div className="spotlight-info">
+                     <span className="league-pill">{featuredMatch.league}</span>
+                     <div className="spotlight-teams">
+                        <span>{featuredMatch.teams.home}</span>
+                        <span className="vs-min">VS</span>
+                        <span>{featuredMatch.teams.away}</span>
+                     </div>
+                     <div className="spotlight-footer">
+                        <span className="time"><Clock size={12} /> {new Date(featuredMatch.startTime).toLocaleString('ko-KR', { hour: '2-digit', minute: '2-digit' })} 시작</span>
+                        <span className="prediction-pill">AI 예측: {featuredMatch.previewScore}</span>
+                     </div>
+                  </div>
+               </div>
+            </section>
+
+            <div className="section-title" style={{ marginTop: '2.5rem' }}>
+               <CalendarDays size={16} opacity={0.5} />
+               <span>오늘의 경기 리스트 // Daily Fixtures</span>
             </div>
-            
+
             <div className="search-box">
                <Search size={16} className="search-icon" />
                <input 
@@ -163,31 +202,40 @@ export const MatchTerminal: React.FC = () => {
                />
             </div>
 
-            <div className="match-list custom-scrollbar">
-               {filteredMatches.map(match => (
-                 <div 
-                   key={match.id} 
-                   className={`match-card ${selectedMatch.id === match.id ? 'selected' : ''}`}
-                   onClick={() => {
-                     setSelectedMatch(match);
-                     setResults([]);
-                     setIsBetPlaced(false);
-                     setBetPick(null);
-                     if (window.innerWidth < 1280) setActiveTab('analysis');
-                   }}
-                 >
-                    <div className="card-top">
-                       <span className="league-tag">{match.league}</span>
-                       <span className="time-tag"><Clock size={12} /> {new Date(match.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    </div>
-                    <div className="card-teams">
-                       <h3 className={selectedMatch.id === match.id ? 'highlight' : ''}>{match.teams.home}</h3>
-                       <h3>{match.teams.away}</h3>
-                    </div>
-                    <div className="card-odds">
-                       <div className="odd-box">홈: {match.odds.win.toFixed(2)}</div>
-                       <div className="odd-box">무: {match.odds.draw.toFixed(2)}</div>
-                       <div className="odd-box">원정: {match.odds.loss.toFixed(2)}</div>
+            <div className="grouped-match-list custom-scrollbar">
+               {Object.entries(groupedMatches).map(([date, matches]) => (
+                 <div key={date} className="date-group">
+                    <div className="date-header">{date === new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }) ? "오늘 // Today" : date}</div>
+                    <div className="match-grid">
+                       {matches.map(match => (
+                         <div 
+                           key={match.id} 
+                           className={`h-match-card ${selectedMatch.id === match.id ? 'selected' : ''}`}
+                           onClick={() => {
+                             setSelectedMatch(match);
+                             setResults([]);
+                             setIsBetPlaced(false);
+                             setBetPick(null);
+                             if (window.innerWidth < 1280) setActiveTab('analysis');
+                           }}
+                         >
+                            <div className="team home">
+                               <div className="team-avatar">{match.teams.home[0]}</div>
+                               <span>{match.teams.home}</span>
+                            </div>
+                            
+                            <div className="match-mid">
+                               <div className="mid-time">{new Date(match.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                               <div className="predicted-score">{match.previewScore}</div>
+                               <div className="mid-label">AI PREVIEW</div>
+                            </div>
+
+                            <div className="team away">
+                               <span>{match.teams.away}</span>
+                               <div className="team-avatar secondary">{match.teams.away[0]}</div>
+                            </div>
+                         </div>
+                       ))}
                     </div>
                  </div>
                ))}
@@ -227,7 +275,7 @@ export const MatchTerminal: React.FC = () => {
                           <div className="conclusion-box">
                              <Shield size={60} className="bg-icon" />
                              <span className="conclusion-label">최종 전술 결론 // Tactical Conclusion</span>
-                             <span className="score">{consensus.predictedScore || "2:1"}</span>
+                             <span className="score">{consensus.predictedScore || selectedMatch.previewScore}</span>
                              <div className="rank">
                                 <Star size={12} fill="currentColor" /> 분석 등급: 최상 // High
                              </div>
@@ -383,7 +431,7 @@ export const MatchTerminal: React.FC = () => {
         .brand-name span { color: #00e676; text-shadow: 0 0 30px rgba(0, 230, 118, 0.5); }
         .brand-tagline { font-size: 0.8rem; font-weight: 900; letter-spacing: 0.5em; opacity: 0.1; text-transform: uppercase; margin-top: 0.5rem; }
         .sys-stats { display: flex; align-items: center; gap: 1rem; background: rgba(255, 255, 255, 0.02); padding: 0.5rem; border-radius: 1.5rem; }
-        .stat-pill { display: flex; align-items: center; gap: 0.5rem; border-right: 1px solid rgba(255, 255, 255, 0.05); padding-right: 1rem; margin-right: 0.5rem; }
+        .stat-pill { display: flex; align-items: center; gap: 0.5rem; }
         .status-dot { width: 8px; height: 8px; background: #00e676; border-radius: 50%; box-shadow: 0 0 10px #00e676; }
         .stat-pill span { font-size: 0.6rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; }
         .stat-data { display: flex; gap: 1rem; font-family: monospace; font-size: 0.6rem; color: rgba(0, 230, 118, 0.4); text-transform: uppercase; }
@@ -391,13 +439,29 @@ export const MatchTerminal: React.FC = () => {
         /* Main Grid */
         .terminal-main {
           display: grid;
-          grid-template-cols: 1fr 2fr 1.2fr;
+          grid-template-cols: 1fr 1.5fr 1fr;
           gap: 3rem;
-          min-height: 700px;
+          min-height: 800px;
         }
 
-        .panel-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem; opacity: 0.3; }
-        .panel-header h2 { font-size: 0.6rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.4em; }
+        .section-title { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+        .section-title span { font-size: 0.65rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.2em; color: rgba(255,255,255,0.4); }
+
+        /* Spotlight Header */
+        .spotlight-card {
+           position: relative; border-radius: 2rem; overflow: hidden; padding: 2.5rem;
+           background: linear-gradient(135deg, rgba(0, 230, 118, 0.2), rgba(0, 0, 0, 0.6));
+           border: 1px solid rgba(0, 230, 118, 0.3); cursor: pointer; transition: all 0.3s;
+           min-height: 180px; display: flex; align-items: center;
+        }
+        .spotlight-card:hover { transform: scale(1.02); box-shadow: 0 20px 50px rgba(0, 230, 118, 0.2); }
+        .spotlight-bg { position: absolute; inset: 0; background: url('https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=1000&auto=format&fit=crop') center/cover; opacity: 0.15; mix-blend-mode: overlay; pointer-events: none; }
+        .spotlight-info { position: relative; width: 100%; z-index: 2; }
+        .league-pill { font-size: 0.5rem; font-weight: 900; background: #00e676; color: black; padding: 0.3rem 0.8rem; border-radius: 1rem; text-transform: uppercase; }
+        .spotlight-teams { font-size: 2.5rem; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: -0.05em; display: flex; align-items: center; gap: 1rem; margin: 1rem 0; }
+        .vs-min { font-size: 0.8rem; opacity: 0.3; font-style: normal; }
+        .spotlight-footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem; }
+        .prediction-pill { font-size: 0.7rem; font-weight: 800; background: rgba(255,255,255,0.1); padding: 0.4rem 1rem; border-radius: 1.5rem; }
 
         /* Panel A: Matches */
         .search-box { position: relative; margin-bottom: 2rem; }
@@ -408,19 +472,31 @@ export const MatchTerminal: React.FC = () => {
         }
         .search-box input:focus { background: rgba(255, 255, 255, 0.06); border-color: rgba(0, 230, 118, 0.3); }
 
-        .match-list { display: flex; flex-direction: column; gap: 1rem; max-height: 600px; overflow-y: auto; padding-right: 0.5rem; }
-        .match-card {
-          padding: 1.5rem; border-radius: 1.5rem; background: rgba(255, 255, 255, 0.01); border: 1px solid rgba(255, 255, 255, 0.05);
-          cursor: pointer; transition: all 0.3s; position: relative; overflow: hidden;
+        .grouped-match-list { max-height: 800px; overflow-y: auto; padding-right: 0.5rem; }
+        .date-group { margin-bottom: 2rem; }
+        .date-header { font-size: 0.7rem; font-weight: 900; color: #00e676; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.1em; border-left: 3px solid #00e676; padding-left: 0.75rem; }
+        .match-grid { display: flex; flex-direction: column; gap: 1rem; }
+
+        /* Horizontal Match Card */
+        .h-match-card {
+           display: grid; grid-template-cols: 1fr auto 1fr; align-items: center; gap: 1rem;
+           padding: 1.2rem 1.5rem; border-radius: 1.5rem; background: rgba(255,255,255,0.01);
+           border: 1px solid rgba(255,255,255,0.05); cursor: pointer; transition: all 0.3s;
         }
-        .match-card.selected { background: rgba(0, 230, 118, 0.05); border-color: rgba(0, 230, 118, 0.4); box-shadow: 0 10px 40px rgba(0,0,0,0.4); }
-        .card-top { display: flex; justify-content: space-between; margin-bottom: 1rem; }
-        .league-tag { font-size: 0.6rem; font-weight: 900; background: rgba(255, 255, 255, 0.05); padding: 0.4rem 0.8rem; border-radius: 1rem; color: rgba(255,255,255,0.4); text-transform: uppercase; }
-        .time-tag { font-family: monospace; font-size: 0.6rem; color: rgba(255,255,255,0.1); display: flex; align-items: center; gap: 0.3rem; }
-        .card-teams h3 { font-size: 1.2rem; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: -0.02em; line-height: 1; }
-        .card-teams h3.highlight { color: #00e676; }
-        .card-odds { display: flex; gap: 0.5rem; margin-top: 1.5rem; }
-        .odd-box { flex: 1; text-align: center; border-radius: 0.8rem; background: rgba(0,0,0,0.3); padding: 0.5rem; font-size: 0.7rem; font-weight: 800; color: rgba(255,255,255,0.3); }
+        .h-match-card:hover { background: rgba(255,255,255,0.03); }
+        .h-match-card.selected { background: rgba(0, 230, 118, 0.05); border-color: #00e676; }
+        .team { display: flex; align-items: center; gap: 1rem; font-weight: 900; font-size: 0.9rem; text-transform: uppercase; letter-spacing: -0.02em; }
+        .home { justify-content: flex-end; text-align: right; }
+        .away { justify-content: flex-start; text-align: left; }
+        .team-avatar { 
+           width: 32px; height: 32px; border-radius: 50%; background: #00e676; color: black;
+           display: flex; align-items: center; justify-content: center; font-size: 0.8rem;
+        }
+        .team-avatar.secondary { background: #334155; color: white; }
+        .match-mid { text-align: center; display: flex; flex-direction: column; align-items: center; padding: 0 1rem; border-left: 1px solid rgba(255,255,255,0.05); border-right: 1px solid rgba(255,255,255,0.05); }
+        .mid-time { font-size: 0.6rem; opacity: 0.3; margin-bottom: 0.2rem; }
+        .predicted-score { font-size: 1.5rem; font-weight: 900; font-style: italic; color: #00e676; line-height: 1; margin: 0.2rem 0; }
+        .mid-label { font-size: 0.4rem; font-weight: 900; letter-spacing: 0.2em; opacity: 0.2; }
 
         /* Panel B: Analysis */
         .analysis-card {
@@ -480,7 +556,6 @@ export const MatchTerminal: React.FC = () => {
         .strat-header span { font-size: 0.5rem; font-weight: 900; opacity: 0.1; text-transform: uppercase; letter-spacing: 0.2em; }
         
         .slip-container { flex: 1; display: flex; flex-direction: column; gap: 2rem; }
-        .slip-match p { font-size: 0.5rem; font-weight: 800; color: rgba(255,255,255,0.2); text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 0.5rem; }
         .slip-match h4 { font-size: 1.1rem; font-weight: 900; text-transform: uppercase; letter-spacing: -0.02em; }
         .slip-actions { display: flex; flex-direction: column; gap: 1rem; }
         .pick-btn {
@@ -510,33 +585,42 @@ export const MatchTerminal: React.FC = () => {
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); border-radius: 2px; }
 
         @media (max-width: 1280px) {
-          .terminal-container { padding: 1rem; padding-bottom: 150px; }
-          .terminal-main { height: auto; grid-template-cols: 1fr; gap: 2rem; }
+          .terminal-container { padding: 0.75rem; padding-bottom: 15rem; }
+          .terminal-header { padding-bottom: 1rem; }
+          .brand-name { font-size: 2rem; }
+          .lg-only { display: none; }
+          .terminal-main { grid-template-cols: 1fr; gap: 2rem; }
           .panel-a, .panel-b, .panel-c { display: none; }
           .panel-a.active, .panel-b.active, .panel-c.active { display: block; }
-          .match-list { height: auto; max-height: none; }
+          .spotlight-card { padding: 1.5rem; border-radius: 1.5rem; }
+          .spotlight-teams { font-size: 1.8rem; }
+          .h-match-card { padding: 1rem; border-radius: 1.2rem; gap: 0.5rem; }
+          .team { font-size: 0.75rem; gap: 0.5rem; }
+          .team-avatar { width: 24px; height: 24px; font-size: 0.6rem; }
+          .predicted-score { font-size: 1.2rem; }
           .analysis-card { padding: 2rem; border-radius: 2rem; min-height: 500px; }
-          .match-title { font-size: 3rem; }
+          .match-title { font-size: 2.5rem; }
           .result-main { grid-template-cols: 1fr; gap: 2rem; }
           .score { font-size: 5rem; }
           .mobile-nav {
             display: block; position: fixed; bottom: 0; left: 0; right: 0;
-            background: linear-gradient(0deg, #020617, transparent); padding: 4rem 2rem 2rem; z-index: 1000;
+            background: linear-gradient(0deg, #020617 80%, transparent); padding: 5rem 1.5rem 1.5rem; z-index: 1000;
           }
           .nav-bar {
-            background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(20px);
-            border: 1px solid rgba(255,255,255,0.1); border-radius: 3rem; display: flex;
-            padding: 0.5rem; justify-content: space-around; box-shadow: 0 20px 80px rgba(0,0,0,0.8);
+            background: rgba(15, 23, 42, 0.98); backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 3.5rem; display: flex;
+            padding: 0.5rem; justify-content: space-around; box-shadow: 0 20px 80px rgba(0,0,0,0.9);
           }
           .nav-bar button {
             background: none; border: none; color: rgba(255,255,255,0.2);
-            padding: 1rem; display: flex; flex-direction: column; align-items: center; gap: 0.2rem;
-            transition: all 0.3s; flex: 1; border-radius: 2.5rem;
+            padding: 1.2rem; display: flex; flex-direction: column; align-items: center; gap: 0.3rem;
+            transition: all 0.3s; flex: 1; border-radius: 3rem;
           }
-          .nav-bar button span { font-size: 0.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; }
-          .nav-bar button.active { background: #00e676; color: black; box-shadow: 0 10px 20px rgba(0,230,118,0.3); }
+          .nav-bar button span { font-size: 0.55rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; }
+          .nav-bar button.active { background: #00e676; color: black; box-shadow: 0 10px 30px rgba(0,230,118,0.4); }
         }
       `}</style>
     </div>
   );
 };
+

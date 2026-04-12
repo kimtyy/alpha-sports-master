@@ -18,6 +18,8 @@ export interface MatchData {
   league: string;
   odds: { win: number; draw: number; loss: number };
   startTime: string;
+  isFeatured?: boolean;
+  previewScore?: string;
 }
 
 export class AlphaOrchestrator {
