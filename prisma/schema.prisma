@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model MatchData {
+  id            String   @id @default(cuid())
+  matchId       String   @unique
+  date          DateTime
+  homeTeam      String
+  awayTeam      String
+  homeScore     Int?
+  awayScore     Int?
+  league        String
+  statistics    String   // JSON string representing Possession, Shots, xG, etc.
+  predictions   PredictionModel[]
+  marketFlow    MarketFlow[]
+}
+
+model PredictionModel {
+  id               String    @id @default(cuid())
+  modelType        String    // Poisson, Logistic, SVM, etc.
+  predictedWinner  String
+  probability      Float
+  matchId          String
+  match            MatchData @relation(fields: [matchId], references: [matchId])
+  createdAt        DateTime  @default(now())
+}
+
+model MarketFlow {
+  id           String    @id @default(cuid())
+  initialOdds  Float
+  currentOdds  Float
+  oddsTrend    String    // Drop, Rise
+  matchId      String
+  match        MatchData @relation(fields: [matchId], references: [matchId])
+  updatedAt    DateTime  @updatedAt
+}
