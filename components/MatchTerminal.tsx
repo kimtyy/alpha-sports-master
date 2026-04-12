@@ -112,12 +112,12 @@ export const MatchTerminal: React.FC = () => {
            <div className="gateway-status">
               <div className="pulse-dot" />
               <div className="gateway-info">
-                 <span className="gateway-label">Gateway Active</span>
-                 <span className="gateway-desc">Official Sports Toto Port // 외부 베팅 포털 연결</span>
+                 <span className="gateway-label">게이트웨이 활성화 // Gateway Active</span>
+                 <span className="gateway-desc">공식 스포츠토토 포트 // Official Sports Toto Port</span>
               </div>
            </div>
            <div className="gateway-button">
-              Connect <MousePointer2 size={12} />
+              연결 // Connect <MousePointer2 size={12} />
            </div>
          </a>
       </div>
@@ -130,16 +130,16 @@ export const MatchTerminal: React.FC = () => {
             </div>
             <div>
                <h1 className="brand-name">Alpha <span>Master</span></h1>
-               <p className="brand-tagline">Tactical Intelligence OS</p>
+               <p className="brand-tagline">지능형 전술 운영 체제 // Tactical Intelligence OS</p>
             </div>
          </div>
          <div className="sys-stats">
             <div className="stat-pill">
                <div className="status-dot" />
-               <span>Syncing</span>
+               <span>데이터 동기화 중 // Syncing</span>
             </div>
             <div className="stat-data">
-               <span>Report: {sysStatus.sync}</span>
+               <span>실시간 리포트: {sysStatus.sync}</span>
                <span>Ver: {sysStatus.version}</span>
             </div>
          </div>
@@ -150,7 +150,7 @@ export const MatchTerminal: React.FC = () => {
          <aside className={`panel-a ${activeTab === 'matches' ? 'active' : ''}`}>
             <div className="panel-header">
                <Target size={14} opacity={0.3} />
-               <h2>Market Targets</h2>
+               <h2>시장 분석 타겟 // Market Targets</h2>
             </div>
             
             <div className="search-box">
@@ -185,9 +185,9 @@ export const MatchTerminal: React.FC = () => {
                        <h3>{match.teams.away}</h3>
                     </div>
                     <div className="card-odds">
-                       <div className="odd-box">H: {match.odds.win.toFixed(2)}</div>
-                       <div className="odd-box">D: {match.odds.draw.toFixed(2)}</div>
-                       <div className="odd-box">A: {match.odds.loss.toFixed(2)}</div>
+                       <div className="odd-box">홈: {match.odds.win.toFixed(2)}</div>
+                       <div className="odd-box">무: {match.odds.draw.toFixed(2)}</div>
+                       <div className="odd-box">원정: {match.odds.loss.toFixed(2)}</div>
                     </div>
                  </div>
                ))}
@@ -200,7 +200,7 @@ export const MatchTerminal: React.FC = () => {
                {isInferring && <div className="scanbar" />}
                
                <div className="analysis-header">
-                  <div className="intel-pill">Strategic Intel Core</div>
+                  <div className="intel-pill">전략 인텔리전스 코어 // Strategic Intel Core</div>
                   <h2 className="match-title">
                      {selectedMatch.teams.home} <br />
                      <span className="vs-label">VS</span> {selectedMatch.teams.away}
@@ -213,7 +213,7 @@ export const MatchTerminal: React.FC = () => {
                  disabled={isInferring}
                >
                   {isInferring ? <Loader2 size={24} className="spin" /> : <Zap size={24} fill="currentColor" />}
-                  <span>{isInferring ? "Computing Tactical Data..." : "Boot Analytics Engine"}</span>
+                  <span>{isInferring ? "데이터 연산 및 전술 도출 중..." : "AI 분석 엔진 기동 // Boot Engine"}</span>
                </button>
 
                <AnimatePresence>
@@ -226,22 +226,22 @@ export const MatchTerminal: React.FC = () => {
                        <div className="result-main">
                           <div className="conclusion-box">
                              <Shield size={60} className="bg-icon" />
-                             <span className="conclusion-label">Tactical Conclusion</span>
+                             <span className="conclusion-label">최종 전술 결론 // Tactical Conclusion</span>
                              <span className="score">{consensus.predictedScore || "2:1"}</span>
                              <div className="rank">
-                                <Star size={12} fill="currentColor" /> Rank: High
+                                <Star size={12} fill="currentColor" /> 분석 등급: 최상 // High
                              </div>
                           </div>
                           <div className="result-side">
                              <div className="side-card">
                                 <div className="side-header">
-                                   <span>Confidence Gauge</span>
+                                   <span>분석 신뢰도 // Confidence</span>
                                    <span className="power">84.2%</span>
                                 </div>
                                 <div className="prog-bar"><div className="prog-fill" /></div>
                              </div>
                              <div className="side-card-b">
-                                <div className="side-header"><Activity size={14} color="#00b0ff" /> <span>Insight</span></div>
+                                <div className="side-header"><Activity size={14} color="#00b0ff" /> <span>인텔 요약 // Insight</span></div>
                                 <p className="insight-text">"{consensus.findings[0]}"</p>
                              </div>
                           </div>
@@ -253,7 +253,7 @@ export const MatchTerminal: React.FC = () => {
                {results.length === 0 && !isInferring && (
                  <div className="empty-stage">
                     <Cpu size={80} />
-                    <p>Intelligence Locked</p>
+                    <p>인텔리전스 잠금 // Intelligence Locked</p>
                     <span>제미나이 1.5 프로 엔진 분석 대기 중</span>
                  </div>
                )}
@@ -266,14 +266,14 @@ export const MatchTerminal: React.FC = () => {
                <div className="strat-header">
                   <Wallet size={20} color="#ffbf00" />
                   <div>
-                     <h3>Strategic Slip</h3>
-                     <span>Active Risk Engine</span>
+                     <h3>전략 전표 // Strategic Slip</h3>
+                     <span>리스크 엔진 가동 중 // Active Risk Engine</span>
                   </div>
                </div>
 
                <div className="slip-container">
                   <div className="slip-match">
-                     <p>Target Selected</p>
+                     <p>타겟 매치 // Target Selected</p>
                      <h4>{selectedMatch.teams.home} vs {selectedMatch.teams.away}</h4>
                   </div>
                   <div className="slip-actions">
@@ -283,13 +283,13 @@ export const MatchTerminal: React.FC = () => {
                          className={`pick-btn ${betPick === type ? 'picked' : ''}`}
                          onClick={() => { setBetPick(type as any); setIsBetPlaced(false); }}
                        >
-                          <span>{type}</span>
+                          <span>{type === 'WIN' ? '승' : type === 'DRAW' ? '무' : '패'}</span>
                           <span>x{type === 'WIN' ? selectedMatch.odds.win : type === 'DRAW' ? selectedMatch.odds.draw : selectedMatch.odds.loss}</span>
                        </button>
                      ))}
                   </div>
                   <div className="slip-meta">
-                     <div className="meta-row"><span>Return / pts</span> <span className="highlight-text">{betPick ? (10000 * (betPick === 'WIN' ? selectedMatch.odds.win : betPick === 'DRAW' ? selectedMatch.odds.draw : selectedMatch.odds.loss)).toLocaleString() : '0'}</span></div>
+                     <div className="meta-row"><span>기대 수익 / Return pts</span> <span className="highlight-text">{betPick ? (10000 * (betPick === 'WIN' ? selectedMatch.odds.win : betPick === 'DRAW' ? selectedMatch.odds.draw : selectedMatch.odds.loss)).toLocaleString() : '0'}</span></div>
                   </div>
                   <button 
                     className={`secure-btn ${isBetPlaced ? 'placed' : ''}`}
@@ -297,7 +297,7 @@ export const MatchTerminal: React.FC = () => {
                     disabled={!betPick || isBetPlaced}
                   >
                      {isBetPlaced ? <CheckCircle2 size={24} /> : <Fingerprint size={24} />}
-                     <span>{isBetPlaced ? "Strategy Implemented" : "Secure Strategy"}</span>
+                     <span>{isBetPlaced ? "전략 실행 완료 // Success" : "전략 보안 집행 // Secure Strategy"}</span>
                   </button>
                </div>
             </div>
@@ -306,9 +306,9 @@ export const MatchTerminal: React.FC = () => {
 
       <nav className="mobile-nav">
          <div className="nav-bar">
-            <button className={activeTab === 'matches' ? 'active' : ''} onClick={() => setActiveTab('matches')}><LayoutGrid size={20} /><span>List</span></button>
-            <button className={activeTab === 'analysis' ? 'active' : ''} onClick={() => setActiveTab('analysis')}><Cpu size={20} /><span>Intel</span></button>
-            <button className={activeTab === 'strategy' ? 'active' : ''} onClick={() => setActiveTab('strategy')}><Wallet size={20} /><span>Bet</span></button>
+            <button className={activeTab === 'matches' ? 'active' : ''} onClick={() => setActiveTab('matches')}><LayoutGrid size={20} /><span>목록 // List</span></button>
+            <button className={activeTab === 'analysis' ? 'active' : ''} onClick={() => setActiveTab('analysis')}><Cpu size={20} /><span>분석 // Intel</span></button>
+            <button className={activeTab === 'strategy' ? 'active' : ''} onClick={() => setActiveTab('strategy')}><Wallet size={20} /><span>베팅 // Bet</span></button>
          </div>
       </nav>
 
