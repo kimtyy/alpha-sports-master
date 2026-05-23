@@ -202,7 +202,7 @@ export const MatchTerminal: React.FC = () => {
             </div>
             <div>
                <h1 className="brand-name">Alpha <span>Sports Master</span></h1>
-               <p className="brand-tagline">지능형 전술 운영 체제 // Intelligence Dashboard OS</p>
+               <p className="brand-tagline">지능형 전술 운영 체제 // Intelligence OS</p>
             </div>
          </div>
          <div className="sys-stats lg-only">
@@ -486,10 +486,22 @@ export const MatchTerminal: React.FC = () => {
                              </div>
                              
                              <div className="result-side" style={{ gap: '1.5rem' }}>
+                                <div className="conclusion-box-mobile-card">
+                                  <div className="mobile-card-left">
+                                     <span className="mobile-card-label">최종 기대 스코어 // EXPECTED SCORE</span>
+                                     <div className="mobile-card-rank">
+                                        <Star size={12} fill="#00e676" color="#00e676" />
+                                        <span>최적 전술 종합 완료 // SYNTHESIZED</span>
+                                     </div>
+                                  </div>
+                                  <div className="mobile-card-score">
+                                     {consensus ? (consensus.predictedScore || selectedMatch.previewScore) : selectedMatch.previewScore}
+                                  </div>
+                                </div>
                                 <div className="side-card" style={{ padding: '1.5rem', borderRadius: '1.5rem' }}>
-                                   <div className="side-header">
-                                      <span>종합 신뢰도 // Confidence</span>
-                                      <span className="power" style={{ fontSize: '0.9rem' }}>{((consensus ? consensus.confidence : 0.85) * 100).toFixed(1)}%</span>
+                                   <div className="side-header" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '1.2rem' }}>
+                                      <span style={{ color: '#AAAAAA', fontSize: '13px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em' }}>종합 신뢰도 // CONFIDENCE</span>
+                                      <span className="power" style={{ color: '#00E676', fontSize: '2rem', fontWeight: 'bold', lineHeight: 1 }}>{((consensus ? consensus.confidence : 0.85) * 100).toFixed(1)}%</span>
                                    </div>
                                    <div className="prog-bar"><div className="prog-fill" style={{ width: `${(consensus ? consensus.confidence : 0.85) * 100}%` }} /></div>
                                 </div>
@@ -670,7 +682,7 @@ export const MatchTerminal: React.FC = () => {
         /* Main Grid */
         .terminal-main {
           display: grid;
-          grid-template-cols: 1fr 1.5fr 1fr;
+          grid-template-columns: 1fr 1.5fr 1fr;
           gap: 3rem;
           min-height: 800px;
         }
@@ -711,7 +723,7 @@ export const MatchTerminal: React.FC = () => {
 
         /* Horizontal Match Card */
         .h-match-card {
-           display: grid; grid-template-cols: 1fr auto 1fr; align-items: center; gap: 1rem;
+           display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem;
            padding: 1.2rem 1.5rem; border-radius: 1.5rem; background: rgba(255,255,255,0.02);
            border: 1px solid rgba(255,255,255,0.08); cursor: pointer; transition: all 0.3s;
         }
@@ -763,13 +775,16 @@ export const MatchTerminal: React.FC = () => {
         @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
         .analysis-results { margin-top: 4rem; }
-        .result-main { display: grid; grid-template-cols: 1.2fr 1fr; gap: 3rem; }
-        .conclusion-box {
-          background: #00e676; color: black; padding: 3rem; border-radius: 4rem;
-          display: flex; flex-direction: column; align-items: center; justify-content: center;
-          position: relative; overflow: hidden; text-align: center;
-          box-shadow: 0 20px 80px rgba(0, 230, 118, 0.3);
-        }
+        .result-main { display: grid; grid-template-columns: 1.2fr 1fr; gap: 3rem; }
+         .conclusion-box {
+           background: #00e676; color: black; padding: 3rem; border-radius: 4rem;
+           display: flex; flex-direction: column; align-items: center; justify-content: center;
+           position: relative; overflow: hidden; text-align: center;
+           box-shadow: 0 20px 80px rgba(0, 230, 118, 0.3);
+         }
+         .conclusion-box-mobile-card {
+           display: none;
+         }
         .bg-icon { position: absolute; top: -10%; right: -10%; opacity: 0.1; transform: rotate(15deg); }
         .conclusion-label { font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.4em; color: #AAAAAA; margin-bottom: 2rem; opacity: 1; }
         .score { font-size: 8rem; font-weight: 900; font-style: italic; letter-spacing: -0.05em; line-height: 1; border-bottom: 8px solid rgba(0,0,0,0.1); padding-bottom: 1rem; margin-bottom: 1rem; color: black; }
@@ -864,7 +879,7 @@ export const MatchTerminal: React.FC = () => {
           .terminal-header { padding-bottom: 1rem; }
           .brand-name { font-size: 2rem; }
           .lg-only { display: none; }
-          .terminal-main { grid-template-cols: 1fr; gap: 2rem; }
+          .terminal-main { grid-template-columns: 1fr; gap: 2rem; }
           .panel-a, .panel-b, .panel-c { display: none; }
           .panel-a.active, .panel-b.active, .panel-c.active { display: block; }
           .spotlight-card { padding: 1.5rem; border-radius: 1.5rem; }
@@ -876,7 +891,62 @@ export const MatchTerminal: React.FC = () => {
           .predicted-score { font-size: 1.2rem; }
           .analysis-card { padding: 2rem; border-radius: 2rem; min-height: 500px; }
           .match-title { font-size: 2.5rem; }
-          .result-main { grid-template-cols: 1fr; gap: 2rem; }
+          .result-main {
+             display: flex !important;
+             flex-direction: row !important;
+             gap: 1.2rem !important;
+             align-items: stretch !important;
+          }
+          .conclusion-box {
+             width: 12px !important;
+             padding: 0 !important;
+             border-radius: 6px !important;
+             background: #00e676 !important;
+             box-shadow: 0 0 15px rgba(0, 230, 118, 0.4) !important;
+             flex-shrink: 0 !important;
+             min-height: auto !important;
+          }
+          .conclusion-box * {
+             display: none !important;
+          }
+          .conclusion-box-mobile-card {
+             display: flex !important;
+             justify-content: space-between;
+             align-items: center;
+             background: rgba(255, 255, 255, 0.03);
+             border: 1px solid rgba(0, 230, 118, 0.2);
+             padding: 1.2rem 1.5rem;
+             border-radius: 1.5rem;
+             gap: 1rem;
+             width: 100%;
+          }
+          .mobile-card-left {
+             display: flex;
+             flex-direction: column;
+             gap: 0.4rem;
+             text-align: left;
+          }
+          .mobile-card-label {
+             font-size: 13px;
+             color: #AAAAAA;
+             font-weight: 800;
+             letter-spacing: 0.05em;
+          }
+          .mobile-card-rank {
+             display: flex;
+             align-items: center;
+             gap: 0.4rem;
+             font-size: 13px;
+             color: #00e676;
+             font-weight: bold;
+          }
+          .mobile-card-score {
+             font-size: 2.2rem;
+             font-weight: 900;
+             font-style: italic;
+             color: #00e676;
+             text-shadow: 0 0 15px rgba(0, 230, 118, 0.3);
+          }
           .score { font-size: 5rem; }
           .mobile-nav {
             display: block; position: fixed; bottom: 0; left: 0; right: 0;
