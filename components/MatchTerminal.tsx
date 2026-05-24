@@ -67,12 +67,42 @@ export const MatchTerminal: React.FC = () => {
   const [selectedMatch, setSelectedMatch] = useState<MatchData>(enrichMatches(MOCK_MATCHES)[0]);
   const [betPick, setBetPick] = useState<'WIN' | 'DRAW' | 'LOSS' | null>(null);
   const [isBetPlaced, setIsBetPlaced] = useState(false);
-  const [activeTab, setActiveTab] = useState<'home' | 'analysis' | 'strategy' | 'result' | 'profile'>('home');
-  const [selectedSport, setSelectedSport] = useState<string>('all');
   
-  // Capital & Folding States
+  // Navigation & Filtering States
+  const [activeTab, setActiveTab] = useState<'home' | 'analysis' | 'strategy' | 'result' | 'profile' | 'notifications'>('home');
+  const [selectedSport, setSelectedSport] = useState<string>('all');
+  const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [showOnlyValueBets, setShowOnlyValueBets] = useState<boolean>(false);
+  
+  // Capital & Accordion States
   const [capital, setCapital] = useState<number>(1000000); 
   const [isDetailsOpen, setIsDetailsOpen] = useState<boolean>(false);
+
+  // Mock Notifications Data
+  const notifications = [
+    {
+      id: 1,
+      title: "AI 분석 완료 및 추천 매치 감지",
+      desc: "EPL MAN CITY vs ARSENAL 경기에 대해 기대값 우위가 검증되었습니다. Quarter Kelly에 기반한 포트폴리오 비중 편입을 추천합니다.",
+      time: "방금 전",
+      tag: "베팅 추천"
+    },
+    {
+      id: 2,
+      title: "해외 배당 급변 흐름 감지",
+      desc: "분데스리가 BAYERN MUNICH vs LEVERKUSEN 홈팀 승리 기대 확률이 상승하며 오즈메이커 배당률이 1.65로 하락 조정되었습니다.",
+      time: "25분 전",
+      tag: "배당 변동"
+    },
+    {
+      id: 3,
+      title: "실시간 xG 예측 지수 업데이트",
+      desc: "FC SEOUL vs ULSAN HD 경기에 대한 서브 에이전트 전술 시뮬레이션 결과 기대 득점(xG) 편차가 크게 갱신되었습니다.",
+      time: "1시간 전",
+      tag: "분석 갱신"
+    }
+  ];
 
   useEffect(() => {
     setMounted(true);
@@ -151,78 +181,157 @@ export const MatchTerminal: React.FC = () => {
     setIsBetPlaced(true);
   };
 
+  // Reset helper for Global Home recovery
+  const resetToHome = () => {
+    setActiveTab('home');
+    setSelectedSport('all');
+    setSearchQuery('');
+    setIsSearchOpen(false);
+    setShowOnlyValueBets(false);
+  };
+
   const aiRecommendedCount = useMemo(() => {
     return matches.filter(m => m.kellyResult?.isValueBet).length;
   }, [matches]);
 
   const filteredMatches = useMemo(() => {
-    if (selectedSport === 'all') return matches;
-    return matches.filter(m => m.sport === selectedSport);
-  }, [matches, selectedSport]);
+    let result = matches;
+    
+    // 1. Sport category filtering
+    if (selectedSport !== 'all') {
+      result = result.filter(m => m.sport === selectedSport);
+    }
+    
+    // 2. Recommend only filter (Value Bet)
+    if (showOnlyValueBets) {
+      result = result.filter(m => m.kellyResult?.isValueBet);
+    }
+    
+    // 3. Search query filtering (home team, away team, league)
+    if (searchQuery.trim() !== '') {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(m => 
+        m.teams.home.toLowerCase().includes(q) ||
+        m.teams.away.toLowerCase().includes(q) ||
+        m.league.toLowerCase().includes(q)
+      );
+    }
+    
+    return result;
+  }, [matches, selectedSport, showOnlyValueBets, searchQuery]);
 
   if (!mounted) return null;
 
   return (
     <div id="mobile-app-root" className="mobile-app-container">
-      {/* 1. Header - Sticky Top */}
-      <header className="app-header">
-        <div className="header-logo">
-          ALPHA <span>SPORTS</span>
-        </div>
-        <div className="header-actions">
-          <div className="bell-container">
-            <Bell size={22} className="bell-icon" />
-            <span className="bell-badge">2</span>
+      
+      {/* 3-Row Sticky Top Wrapper: Bundles Header, Recommend Bar & Tabs securely */}
+      <div className="sticky-top-wrapper">
+        {/* Row 1: App Header */}
+        <header className="app-header">
+          <div className="header-logo" onClick={resetToHome}>
+            ALPHA <span>SPORTS</span>
           </div>
-          <Search size={22} className="search-icon" />
-        </div>
-      </header>
+          <div className="header-actions">
+            <div 
+              className={`bell-container ${activeTab === 'notifications' ? 'active' : ''}`}
+              onClick={() => setActiveTab('notifications')}
+            >
+              <Bell size={22} className="bell-icon" />
+              <span className="bell-badge">2</span>
+            </div>
+            <Search 
+              size={22} 
+              className={`search-icon ${isSearchOpen ? 'active' : ''}`} 
+              onClick={() => {
+                setIsSearchOpen(!isSearchOpen);
+                if (isSearchOpen) setSearchQuery(''); // Clear query when closing
+              }}
+            />
+          </div>
+        </header>
 
-      {/* 2. Today's Pick Bar - Sticky */}
-      <div className="recommend-bar">
-        <span className="recommend-title">오늘의 추천</span>
-        <span 
-          className="recommend-action"
-          onClick={() => {
-            setSelectedSport('all');
-            setActiveTab('home');
-          }}
-        >
-          AI 추천 {aiRecommendedCount}경기 ›
-        </span>
-      </div>
+        {/* Row 1.5: Expandable Real-time Search Overlay */}
+        <AnimatePresence>
+          {isSearchOpen && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="search-overlay-bar"
+            >
+              <div className="search-input-wrapper">
+                <Search size={16} className="search-inner-icon" />
+                <input 
+                  type="text" 
+                  placeholder="팀명 또는 리그명으로 전술 검색..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="search-input-field"
+                  autoFocus
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="search-clear-btn">
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-      {/* 3. Sport Navigation Tabs - Sticky */}
-      <nav className="sport-tabs-bar">
-        {[
-          { id: 'all', label: '전체', icon: null },
-          { id: 'soccer', label: '축구', icon: '⚽' },
-          { id: 'baseball', label: '야구', icon: '⚾' },
-          { id: 'basketball', label: '농구', icon: '🏀' },
-          { id: 'football', label: '미식', icon: '🏈' },
-          { id: 'tennis', label: '테니스', icon: '🎾' }
-        ].map(tab => (
-          <button 
-            key={tab.id}
-            className={`sport-tab-btn ${selectedSport === tab.id ? 'active' : ''}`}
+        {/* Row 2: Today's Pick Bar */}
+        <div className="recommend-bar">
+          <span className="recommend-title">오늘의 추천</span>
+          <span 
+            className={`recommend-action ${showOnlyValueBets ? 'filtering-active' : ''}`}
             onClick={() => {
-              setSelectedSport(tab.id);
+              setShowOnlyValueBets(!showOnlyValueBets);
+              setSelectedSport('all'); // Show all sports when analyzing recommendations
               setActiveTab('home');
             }}
           >
-            {tab.icon && <span className="sport-icon">{tab.icon}</span>}
-            {tab.label}
-          </button>
-        ))}
-      </nav>
+            {showOnlyValueBets ? '전체 보기' : `AI 추천 ${aiRecommendedCount}경기 ›`}
+          </span>
+        </div>
+
+        {/* Row 3: Sport Navigation Tabs */}
+        <nav className="sport-tabs-bar">
+          {[
+            { id: 'all', label: '전체', icon: null },
+            { id: 'soccer', label: '축구', icon: '⚽' },
+            { id: 'baseball', label: '야구', icon: '⚾' },
+            { id: 'basketball', label: '농구', icon: '🏀' },
+            { id: 'football', label: '미식', icon: '🏈' },
+            { id: 'tennis', label: '테니스', icon: '🎾' }
+          ].map(tab => (
+            <button 
+              key={tab.id}
+              className={`sport-tab-btn ${selectedSport === tab.id && !showOnlyValueBets ? 'active' : ''}`}
+              onClick={() => {
+                setSelectedSport(tab.id);
+                setShowOnlyValueBets(false); // Disable recommendation-only filter when clicking tab
+                setActiveTab('home');
+              }}
+            >
+              {tab.icon && <span className="sport-icon">{tab.icon}</span>}
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
 
       {/* Main Body - Viewport Area with Scroll */}
       <main className="app-body-content custom-scrollbar">
         {activeTab === 'home' && (
           <div className="home-view-wrapper">
             <div className="today-section-header">
-              <span className="section-title">오늘 경기</span>
-              <span className="section-link">전체보기</span>
+              <span className="section-title">
+                {showOnlyValueBets ? 'AI 추천 분석 매치' : searchQuery ? `'${searchQuery}' 검색 결과` : '오늘 경기'}
+              </span>
+              {(showOnlyValueBets || searchQuery) && (
+                <span className="section-link reset" onClick={resetToHome}>필터 해제</span>
+              )}
             </div>
 
             <div className="match-cards-list">
@@ -278,8 +387,9 @@ export const MatchTerminal: React.FC = () => {
                 })
               ) : (
                 <div className="no-matches-screen">
-                  <Flame size={40} opacity={0.3} />
-                  <p>등록된 경기가 존재하지 않습니다.</p>
+                  <Flame size={40} className="no-match-glow-icon" />
+                  <p className="no-match-primary">오늘 해당 종목 경기가 없습니다</p>
+                  <span className="no-match-sub">AI 핵심 인텔리전스 시스템이 다음 전술 매치업을 수집 중입니다.</span>
                 </div>
               )}
             </div>
@@ -474,6 +584,30 @@ export const MatchTerminal: React.FC = () => {
           </div>
         )}
 
+        {activeTab === 'notifications' && (
+          <div className="notifications-view-wrapper">
+            <div className="notif-box-container">
+              <div className="notif-header">
+                <Bell size={20} color="#00e676" />
+                <h3 className="notif-title">알림 내역</h3>
+              </div>
+              
+              <div className="notif-list">
+                {notifications.map(item => (
+                  <div key={item.id} className="notif-item-card">
+                    <div className="notif-badge-row">
+                      <span className="notif-tag-pill">{item.tag}</span>
+                      <span className="notif-time-label">{item.time}</span>
+                    </div>
+                    <h4 className="notif-card-title">{item.title}</h4>
+                    <p className="notif-card-desc">{item.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'result' && (
           <div className="dummy-tab-view-wrapper">
             <Trophy size={40} color="#00e676" />
@@ -506,7 +640,13 @@ export const MatchTerminal: React.FC = () => {
             <button 
               key={menu.id}
               className={`tab-menu-item ${isActive ? 'active' : ''}`}
-              onClick={() => setActiveTab(menu.id as any)}
+              onClick={() => {
+                if (menu.id === 'home') {
+                  resetToHome();
+                } else {
+                  setActiveTab(menu.id as any);
+                }
+              }}
             >
               <Icon size={20} className="tab-icon" />
               <span className="tab-label">{menu.label}</span>
@@ -531,25 +671,33 @@ export const MatchTerminal: React.FC = () => {
           overflow-x: hidden;
         }
 
-        /* 1. Header Styles */
-        .app-header {
+        /* 3-Row Sticky Header Container */
+        .sticky-top-wrapper {
           position: sticky;
           top: 0;
-          background-color: rgba(10, 10, 10, 0.95);
-          backdrop-filter: blur(10px);
           z-index: 100;
+          background-color: #0a0a0a;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+          box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+          display: flex;
+          flex-direction: column;
+        }
+
+        /* Header Styles */
+        .app-header {
           height: 56px;
           padding: 0 1.25rem;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.02);
         }
         .header-logo {
           font-size: 1.2rem;
           font-weight: 900;
           letter-spacing: -0.03em;
           color: #ffffff;
+          cursor: pointer;
         }
         .header-logo span {
           color: #00e676;
@@ -563,6 +711,10 @@ export const MatchTerminal: React.FC = () => {
         .bell-container {
           position: relative;
           cursor: pointer;
+          transition: transform 0.2s;
+        }
+        .bell-container.active {
+          color: #00e676;
         }
         .bell-badge {
           position: absolute;
@@ -582,19 +734,61 @@ export const MatchTerminal: React.FC = () => {
         .search-icon {
           cursor: pointer;
           opacity: 0.8;
-          transition: opacity 0.2s;
+          transition: all 0.2s ease-in-out;
+        }
+        .search-icon.active {
+          color: #00e676;
+          opacity: 1;
         }
         .search-icon:hover {
           opacity: 1;
         }
 
-        /* 2. Today's Pick Bar */
+        /* Search Overlay Bar */
+        .search-overlay-bar {
+          background-color: #0c0c0c;
+          padding: 0.6rem 1.25rem;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+          overflow: hidden;
+        }
+        .search-input-wrapper {
+          position: relative;
+          display: flex;
+          align-items: center;
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          border-radius: 0.8rem;
+          padding: 0 0.75rem;
+        }
+        .search-inner-icon {
+          color: #888888;
+          flex-shrink: 0;
+        }
+        .search-input-field {
+          flex: 1;
+          background: transparent;
+          border: none;
+          padding: 0.5rem 0.5rem;
+          color: #ffffff;
+          font-size: 0.85rem;
+          outline: none;
+        }
+        .search-input-field::placeholder {
+          color: #555555;
+        }
+        .search-clear-btn {
+          background: none;
+          border: none;
+          color: #888888;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          padding: 0.2rem;
+        }
+
+        /* Today's Recommend Bar */
         .recommend-bar {
-          position: sticky;
-          top: 56px;
-          background-color: #0a0a0a;
-          z-index: 99;
-          padding: 0.8rem 1.25rem 0.5rem;
+          padding: 0.7rem 1.25rem 0.4rem;
           display: flex;
           justify-content: space-between;
           align-items: center;
@@ -609,22 +803,25 @@ export const MatchTerminal: React.FC = () => {
           font-weight: 700;
           color: #00e676;
           cursor: pointer;
+          padding: 0.2rem 0.5rem;
+          border-radius: 0.4rem;
+          transition: all 0.2s;
+        }
+        .recommend-action.filtering-active {
+          background: rgba(0, 230, 118, 0.12);
+          border: 1px solid rgba(0, 230, 118, 0.25);
         }
 
-        /* 3. Sport Navigation Tabs */
+        /* Sport Tabs Bar */
         .sport-tabs-bar {
-          position: sticky;
-          top: 92px;
-          background-color: #0a0a0a;
-          z-index: 99;
           padding: 0.4rem 1.25rem 0.8rem;
           display: flex;
           gap: 0.5rem;
           overflow-x: auto;
-          scrollbar-width: none; /* Firefox */
+          scrollbar-width: none;
         }
         .sport-tabs-bar::-webkit-scrollbar {
-          display: none; /* Safari and Chrome */
+          display: none;
         }
         .sport-tab-btn {
           background: rgba(255, 255, 255, 0.03);
@@ -655,7 +852,7 @@ export const MatchTerminal: React.FC = () => {
           font-size: 0.9rem;
         }
 
-        /* 4. App Main Body Content Scroll Area */
+        /* App Body Scroll Content */
         .app-body-content {
           flex: 1;
           overflow-y: auto;
@@ -663,7 +860,7 @@ export const MatchTerminal: React.FC = () => {
           flex-direction: column;
         }
 
-        /* Home View Fixtures Styles */
+        /* Home View Styles */
         .home-view-wrapper {
           display: flex;
           flex-direction: column;
@@ -684,6 +881,14 @@ export const MatchTerminal: React.FC = () => {
           font-weight: 700;
           color: #00e676;
           cursor: pointer;
+        }
+        .today-section-header .section-link.reset {
+          background: rgba(255, 255, 255, 0.05);
+          padding: 0.2rem 0.6rem;
+          border-radius: 0.4rem;
+          font-size: 0.75rem;
+          color: #aaaaaa;
+          border: 1px solid rgba(255,255,255,0.08);
         }
         .match-cards-list {
           padding: 0 1.25rem 2rem;
@@ -804,15 +1009,30 @@ export const MatchTerminal: React.FC = () => {
           border-radius: 0.35rem;
         }
 
+        /* High Fidelity Empty Sport Page fallback */
         .no-matches-screen {
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
+          text-align: center;
           gap: 1rem;
-          padding: 4rem 2rem;
-          color: #666666;
-          font-weight: 600;
+          padding: 6rem 2rem;
+        }
+        .no-match-glow-icon {
+          color: rgba(0,230,118,0.2);
+          filter: drop-shadow(0 0 15px rgba(0,230,118,0.15));
+        }
+        .no-match-primary {
+          font-size: 1.1rem;
+          font-weight: 900;
+          color: #ffffff;
+        }
+        .no-match-sub {
+          font-size: 0.8rem;
+          color: #555555;
+          line-height: 1.5;
+          max-width: 250px;
         }
 
         /* Analysis View Styles */
@@ -991,10 +1211,6 @@ export const MatchTerminal: React.FC = () => {
         }
         .spin-icon {
           animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
         }
 
         /* Accordion */
@@ -1227,6 +1443,78 @@ export const MatchTerminal: React.FC = () => {
           border: 1px solid rgba(0, 230, 118, 0.2);
         }
 
+        /* Notifications View Styles */
+        .notifications-view-wrapper {
+          padding: 1.25rem;
+        }
+        .notif-box-container {
+          background: #141414;
+          border: 1px solid rgba(255,255,255,0.04);
+          border-radius: 1.2rem;
+          padding: 1.5rem;
+          display: flex;
+          flex-direction: column;
+          gap: 1.5rem;
+        }
+        .notif-header {
+          display: flex;
+          align-items: center;
+          gap: 0.6rem;
+          border-bottom: 1px solid rgba(255,255,255,0.03);
+          padding-bottom: 0.8rem;
+        }
+        .notif-title {
+          font-size: 1.05rem;
+          font-weight: 900;
+          color: #ffffff;
+        }
+        .notif-list {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        }
+        .notif-item-card {
+          background: rgba(255,255,255,0.02);
+          border: 1px solid rgba(255,255,255,0.04);
+          border-radius: 0.8rem;
+          padding: 1.1rem;
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+          transition: all 0.2s;
+        }
+        .notif-item-card:hover {
+          background: rgba(255,255,255,0.04);
+        }
+        .notif-badge-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .notif-tag-pill {
+          font-size: 0.7rem;
+          font-weight: 800;
+          background: rgba(0, 230, 118, 0.12);
+          color: #00e676;
+          padding: 0.2rem 0.5rem;
+          border-radius: 0.35rem;
+        }
+        .notif-time-label {
+          font-size: 0.7rem;
+          color: #555555;
+          font-weight: 600;
+        }
+        .notif-card-title {
+          font-size: 0.95rem;
+          font-weight: 900;
+          color: #ffffff;
+        }
+        .notif-card-desc {
+          font-size: 0.8rem;
+          color: #aaaaaa;
+          line-height: 1.5;
+        }
+
         /* Dummy Tab View Styles */
         .dummy-tab-view-wrapper {
           display: flex;
@@ -1249,7 +1537,7 @@ export const MatchTerminal: React.FC = () => {
           max-width: 260px;
         }
 
-        /* 5. Sticky Bottom Tabbar - Compact 60px */
+        /* Sticky Bottom Tabbar - Compact 60px */
         .app-bottom-tabbar {
           position: sticky;
           bottom: 0;
