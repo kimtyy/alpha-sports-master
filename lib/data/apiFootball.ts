@@ -46,32 +46,44 @@ export async function fetchTodayMatches(): Promise<MatchData[]> {
     const localISOTime = (new Date(now.getTime() - offset)).toISOString();
     const todayDate = localISOTime.split('T')[0];
 
-    const leagues = '39,140,78,61,292';
+    // API-Football v3 accepts only ONE league per request
+    const leagueIds = [39, 140, 78, 61, 292];
     const season = '2025';
 
-    console.log(`[API_FOOTBALL] Fetching fixtures for Date: ${todayDate}, Leagues: ${leagues}, Season: ${season}`);
+    console.log(`[API_FOOTBALL] Fetching fixtures for Date: ${todayDate}, Leagues: ${leagueIds.join(',')}, Season: ${season}`);
 
-    // 1. Fetch Today's Fixtures
-    const fixturesRes = await fetch(
-      `${BASE_URL}/fixtures?date=${todayDate}&league=${leagues}&season=${season}`,
-      {
-        method: 'GET',
-        headers: {
-          'x-apisports-key': API_KEY,
-        },
-        next: { revalidate: 3600 } // Cache for 1 hour
-      }
+    // 1. Fetch Today's Fixtures (per-league, parallel)
+    const fixturePromises = leagueIds.map(leagueId =>
+      fetch(
+        `${BASE_URL}/fixtures?date=${todayDate}&league=${leagueId}&season=${season}`,
+        {
+          method: 'GET',
+          headers: {
+            'x-apisports-key': API_KEY,
+          },
+          next: { revalidate: 3600 } // Cache for 1 hour
+        }
+      ).then(async res => {
+        if (!res.ok) {
+          console.warn(`[API_FOOTBALL] League ${leagueId} fetch failed: ${res.status} ${res.statusText}`);
+          return [];
+        }
+        const json = await res.json();
+        console.log(`[API_FOOTBALL] League ${leagueId}: ${json.response?.length ?? 0} fixtures, errors: ${JSON.stringify(json.errors || {})}`);
+        return json.response || [];
+      }).catch(err => {
+        console.warn(`[API_FOOTBALL] League ${leagueId} error:`, err);
+        return [];
+      })
     );
 
-    if (!fixturesRes.ok) {
-      throw new Error(`Failed to fetch fixtures: ${fixturesRes.statusText}`);
-    }
+    const allResults = await Promise.all(fixturePromises);
+    const fixturesList = allResults.flat();
 
-    const fixturesJson = await fixturesRes.json();
-    const fixturesList = fixturesJson.response || [];
+    console.log(`[API_FOOTBALL] Total fixtures found: ${fixturesList.length}`);
 
     if (fixturesList.length === 0) {
-      console.warn('[API_FOOTBALL] No fixtures found for today. Returning MOCK_MATCHES.');
+      console.warn('[API_FOOTBALL] No fixtures found for today across all leagues. Returning MOCK_MATCHES.');
       return MOCK_MATCHES;
     }
 
