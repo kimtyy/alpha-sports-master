@@ -47,7 +47,7 @@ export async function fetchTodayMatches(): Promise<MatchData[]> {
     const todayDate = localISOTime.split('T')[0];
 
     const leagues = '39,140,78,61,292';
-    const season = '2024';
+    const season = '2025';
 
     console.log(`[API_FOOTBALL] Fetching fixtures for Date: ${todayDate}, Leagues: ${leagues}, Season: ${season}`);
 
@@ -129,7 +129,7 @@ export async function fetchTodayMatches(): Promise<MatchData[]> {
       const leagueAbbr = getLeagueAbbr(leagueId, leagueName);
       const homeAbbr = getTeamAbbr(homeTeam);
       const awayAbbr = getTeamAbbr(awayTeam);
-      const code = `${leagueAbbr}-2425-${homeAbbr}-${awayAbbr}`;
+      const code = `${leagueAbbr}-2526-${homeAbbr}-${awayAbbr}`;
 
       return {
         id: fixtureId.toString(),
