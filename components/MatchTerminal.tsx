@@ -9,7 +9,7 @@ import {
   BarChart3, Globe, Star, Loader2, MousePointer2,
   CheckCircle2, Info, Wallet, BarChart, X, Menu,
   LineChart as LineChartIcon, SlidersHorizontal,
-  CalendarDays, Flame, Bell, User
+  CalendarDays, Flame, Bell, User, ExternalLink
 } from 'lucide-react';
 import { AgentResult, MatchData as BaseMatchData } from '@/lib/agents/orchestrator';
 import { MOCK_MATCHES } from '@/lib/data/matches';
@@ -636,7 +636,7 @@ export const MatchTerminal: React.FC = () => {
         {[
           { id: 'home', label: '홈', icon: LayoutGrid },
           { id: 'analysis', label: '분석', icon: Cpu },
-          { id: 'strategy', label: '베팅', icon: Wallet },
+          { id: 'strategy', label: '베팅', icon: ExternalLink },
           { id: 'result', label: '결과', icon: Trophy },
           { id: 'profile', label: '내정보', icon: User }
         ].map(menu => {
@@ -647,7 +647,9 @@ export const MatchTerminal: React.FC = () => {
               key={menu.id}
               className={`tab-menu-item ${isActive ? 'active' : ''}`}
               onClick={() => {
-                if (menu.id === 'home') {
+                if (menu.id === 'strategy') {
+                  window.open('https://www.betman.co.kr', '_blank');
+                } else if (menu.id === 'home') {
                   resetToHome();
                 } else {
                   setActiveTab(menu.id as any);
