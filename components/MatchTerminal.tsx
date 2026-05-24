@@ -297,7 +297,7 @@ export const MatchTerminal: React.FC = () => {
               setActiveTab('home');
             }}
           >
-            {showOnlyValueBets ? '전체 보기' : `AI 추천 {aiRecommendedCount}경기 ›`}
+            {showOnlyValueBets ? '전체 보기' : `AI 추천 ${aiRecommendedCount}경기 ›`}
           </span>
         </div>
 
