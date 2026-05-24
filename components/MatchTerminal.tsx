@@ -32,6 +32,9 @@ const getLeagueNameKorean = (league: string): string => {
   if (l.includes('la liga')) return '라리가';
   if (l.includes('bundesliga')) return '분데스리가';
   if (l.includes('k league')) return 'K리그';
+  if (l.includes('kbo')) return 'KBO';
+  if (l.includes('mlb')) return 'MLB';
+  if (l.includes('nba')) return 'NBA';
   return league;
 };
 
@@ -42,6 +45,9 @@ const getInitialProbability = (matchId: string): number => {
     case 'm3': return 0.35; // FC SEOUL vs ULSAN HD
     case 'm4': return 0.85; // BAYERN MUNICH vs LEVERKUSEN -> Value Bet (Theo 76.5%)
     case 'm5': return 0.28; // JEJU UTD vs DAEGU FC
+    case 'm6': return 0.62; // DOOSAN vs LG
+    case 'm7': return 0.78; // DODGERS vs GIANTS -> Value Bet (Theo 42.6%)
+    case 'm8': return 0.58; // LAKERS vs WARRIORS
     default: return 0.50;
   }
 };
@@ -50,7 +56,7 @@ const enrichMatches = (data: BaseMatchData[]): MatchData[] => {
   return data.map(m => {
     const prob = getInitialProbability(m.id);
     const kelly = calcKelly(prob, m.odds.win);
-    const sport = getMatchSport(m.id);
+    const sport = (m as any).sport || getMatchSport(m.id);
     return { ...m, kellyResult: kelly, sport };
   }).sort((a, b) => {
     const aVal = a.kellyResult?.isValueBet ? 1 : 0;
@@ -291,7 +297,7 @@ export const MatchTerminal: React.FC = () => {
               setActiveTab('home');
             }}
           >
-            {showOnlyValueBets ? '전체 보기' : `AI 추천 ${aiRecommendedCount}경기 ›`}
+            {showOnlyValueBets ? '전체 보기' : `AI 추천 {aiRecommendedCount}경기 ›`}
           </span>
         </div>
 
@@ -321,7 +327,7 @@ export const MatchTerminal: React.FC = () => {
         </nav>
       </div>
 
-      {/* Main Body - Viewport Area with Scroll */}
+      {/* Main Body - Viewport Area with Scroll (Strict Height Locked Scroll Area) */}
       <main className="app-body-content custom-scrollbar">
         {activeTab === 'home' && (
           <div className="home-view-wrapper">
@@ -625,7 +631,7 @@ export const MatchTerminal: React.FC = () => {
         )}
       </main>
 
-      {/* 5. Sticky Bottom Tabbar - Compact 60px height */}
+      {/* 5. Sticky Bottom Tabbar - Compact 60px height (Strictly Locked to Bottom) */}
       <footer className="app-bottom-tabbar">
         {[
           { id: 'home', label: '홈', icon: LayoutGrid },
@@ -662,16 +668,16 @@ export const MatchTerminal: React.FC = () => {
           color: #ffffff;
           max-width: 480px;
           margin: 0 auto;
-          min-height: 100vh;
+          height: 100vh; /* Locked Viewport Height */
+          overflow: hidden; /* Prevent Global Scrolling */
           display: flex;
           flex-direction: column;
           font-family: 'Inter', -apple-system, sans-serif;
           position: relative;
           box-shadow: 0 0 40px rgba(0,0,0,0.8);
-          overflow-x: hidden;
         }
 
-        /* 3-Row Sticky Header Container */
+        /* 3-Row Sticky Header Container (Strictly Locked Top) */
         .sticky-top-wrapper {
           position: sticky;
           top: 0;
@@ -681,6 +687,7 @@ export const MatchTerminal: React.FC = () => {
           box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
           display: flex;
           flex-direction: column;
+          flex-shrink: 0; /* Never shrink the top header */
         }
 
         /* Header Styles */
@@ -852,10 +859,10 @@ export const MatchTerminal: React.FC = () => {
           font-size: 0.9rem;
         }
 
-        /* App Body Scroll Content */
+        /* App Body Scroll Content (Strict Height Locked Scroll Area) */
         .app-body-content {
           flex: 1;
-          overflow-y: auto;
+          overflow-y: auto; /* Only allow scrolling inside this specific block */
           display: flex;
           flex-direction: column;
         }
@@ -1551,6 +1558,7 @@ export const MatchTerminal: React.FC = () => {
           justify-content: space-around;
           align-items: center;
           z-index: 100;
+          flex-shrink: 0; /* Strictly protect tabbar from shrinking */
         }
         .tab-menu-item {
           background: none;
