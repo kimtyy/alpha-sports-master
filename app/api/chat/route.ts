@@ -20,7 +20,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' }, { apiVersion: 'v1' });
 
     // Build the prompt context
     const systemPrompt = "당신은 Alpha Sports Master의 AI 스포츠 분석 도우미입니다. 스포츠 경기, 베팅 전략, 켈리 비율 등 사용자의 질문에 전문적이고 친절하게 답해주세요.";
