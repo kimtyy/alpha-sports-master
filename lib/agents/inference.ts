@@ -19,7 +19,7 @@ export class AlphaInference {
     const persona = AGENT_REGISTRY[agentId];
     if (!persona) throw new Error(`Agent ${agentId} not found in registry.`);
 
-    const modelId = 'gemini-1.5-flash';
+    const modelId = 'gemini-2.0-flash-exp';
     
     // Graceful fallback if API key is missing for demonstrations
     if (!process.env.GEMINI_API_KEY) {
@@ -40,7 +40,7 @@ export class AlphaInference {
       };
     }
 
-    const model = genAI.getGenerativeModel({ model: modelId }, { apiVersion: 'v1' });
+    const model = genAI.getGenerativeModel({ model: modelId });
 
     const weather = match.city ? await getCityWeather(match.city) : null;
     const prompt = this.buildPrompt(persona, match, weather, context);
