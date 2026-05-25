@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     // Fetch today's actual matches
     const matches = await fetchTodayMatches();
     const matchesContext = matches && matches.length > 0 
-      ? matches.map(m => `- ${m.league}: ${m.teams.home} vs ${m.teams.away} (상태: ${m.status}, 시간: ${m.time})`).join('\n')
+      ? matches.map(m => `- ${m.league}: ${m.teams.home} vs ${m.teams.away} (시작시간: ${m.startTime})`).join('\n')
       : '오늘 예정된 경기가 없습니다.';
 
     // Build the prompt context
