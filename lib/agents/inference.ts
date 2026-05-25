@@ -19,7 +19,7 @@ export class AlphaInference {
     const persona = AGENT_REGISTRY[agentId];
     if (!persona) throw new Error(`Agent ${agentId} not found in registry.`);
 
-    const modelId = 'gemini-1.5-flash';
+    const modelId = 'gemini-flash-latest';
     
     // Graceful fallback if API key is missing for demonstrations
     if (!process.env.GEMINI_API_KEY) {
