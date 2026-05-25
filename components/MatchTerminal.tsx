@@ -9,7 +9,7 @@ import {
   BarChart3, Globe, Star, Loader2, MousePointer2,
   CheckCircle2, Info, Wallet, BarChart, X, Menu,
   LineChart as LineChartIcon, SlidersHorizontal,
-  CalendarDays, Flame, Bell, User, ExternalLink
+  CalendarDays, Flame, Bell, User, ExternalLink, MessageSquare, Send, Bot
 } from 'lucide-react';
 import { AgentResult, MatchData as BaseMatchData } from '@/lib/agents/orchestrator';
 import { MOCK_MATCHES } from '@/lib/data/matches';
@@ -75,7 +75,7 @@ export const MatchTerminal: React.FC = () => {
   const [isBetPlaced, setIsBetPlaced] = useState(false);
   
   // Navigation & Filtering States
-  const [activeTab, setActiveTab] = useState<'home' | 'analysis' | 'strategy' | 'result' | 'profile' | 'notifications'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'analysis' | 'strategy' | 'chat' | 'profile' | 'notifications'>('home');
   const [selectedSport, setSelectedSport] = useState<string>('all');
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -85,30 +85,54 @@ export const MatchTerminal: React.FC = () => {
   const [capital, setCapital] = useState<number>(1000000); 
   const [isDetailsOpen, setIsDetailsOpen] = useState<boolean>(false);
 
-  // Mock Notifications Data
-  const notifications = [
-    {
-      id: 1,
-      title: "AI 분석 완료 및 추천 매치 감지",
-      desc: "EPL MAN CITY vs ARSENAL 경기에 대해 기대값 우위가 검증되었습니다. Quarter Kelly에 기반한 포트폴리오 비중 편입을 추천합니다.",
-      time: "방금 전",
-      tag: "베팅 추천"
-    },
-    {
-      id: 2,
-      title: "해외 배당 급변 흐름 감지",
-      desc: "분데스리가 BAYERN MUNICH vs LEVERKUSEN 홈팀 승리 기대 확률이 상승하며 오즈메이커 배당률이 1.65로 하락 조정되었습니다.",
-      time: "25분 전",
-      tag: "배당 변동"
-    },
-    {
-      id: 3,
-      title: "실시간 xG 예측 지수 업데이트",
-      desc: "FC SEOUL vs ULSAN HD 경기에 대한 서브 에이전트 전술 시뮬레이션 결과 기대 득점(xG) 편차가 크게 갱신되었습니다.",
-      time: "1시간 전",
-      tag: "분석 갱신"
+  // Chat States
+  const [chatHistory, setChatHistory] = useState<{role: string, content: string}[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
+
+  const handleSendChat = async (text: string) => {
+    if (!text.trim()) return;
+    const newHistory = [...chatHistory, { role: 'user', content: text }];
+    setChatHistory(newHistory);
+    setChatInput('');
+    setIsChatLoading(true);
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, history: chatHistory })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setChatHistory([...newHistory, { role: 'assistant', content: data.text }]);
+      } else {
+        setChatHistory([...newHistory, { role: 'assistant', content: '오류가 발생했습니다: ' + (data.error || '알 수 없는 오류') }]);
+      }
+    } catch (err) {
+      setChatHistory([...newHistory, { role: 'assistant', content: '네트워크 오류가 발생했습니다.' }]);
+    } finally {
+      setIsChatLoading(false);
     }
-  ];
+  };
+
+  // Dynamic Notifications Data
+  const notifications = useMemo(() => {
+    const valueBets = matches.filter(m => m.kellyResult?.isValueBet);
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+
+    return valueBets.map((match, index) => {
+      const leagueStr = getLeagueNameKorean(match.league);
+      return {
+        id: index + 1,
+        title: "AI 분석 완료 및 추천 매치 감지",
+        desc: `${leagueStr} ${match.teams.home} vs ${match.teams.away} 경기에 대해 기대값 우위가 검증되었습니다. Quarter Kelly에 기반한 포트폴리오 비중 편입을 추천합니다.`,
+        time: timeString,
+        tag: "베팅 추천"
+      };
+    });
+  }, [matches]);
 
   useEffect(() => {
     setMounted(true);
@@ -244,7 +268,7 @@ export const MatchTerminal: React.FC = () => {
               onClick={() => setActiveTab('notifications')}
             >
               <Bell size={22} className="bell-icon" />
-              <span className="bell-badge">2</span>
+              {notifications.length > 0 && <span className="bell-badge">{notifications.length}</span>}
             </div>
             <Search 
               size={22} 
@@ -614,11 +638,55 @@ export const MatchTerminal: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'result' && (
-          <div className="dummy-tab-view-wrapper">
-            <Trophy size={40} color="#00e676" />
-            <h3>종합 분석 결과</h3>
-            <p>오늘 집행된 실시간 베팅 및 전술 시뮬레이션 결과 데이터를 가공 중입니다.</p>
+        {activeTab === 'chat' && (
+          <div className="chat-view-wrapper">
+            <div className="chat-header">
+              <MessageSquare size={20} color="#00e676" />
+              <h3>AI 스포츠 분석 어시스턴트</h3>
+            </div>
+            
+            <div className="chat-history-container custom-scrollbar">
+              {chatHistory.length === 0 ? (
+                <div className="chat-empty-state">
+                  <Bot size={40} className="bot-icon" />
+                  <p>궁금한 점을 물어보세요!</p>
+                  <div className="chat-suggestions">
+                    {["오늘 추천 경기는?", "켈리 비율이 뭔가요?", "월드컵 일정 알려줘"].map(q => (
+                      <button key={q} onClick={() => handleSendChat(q)} className="suggestion-btn">
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                chatHistory.map((msg, i) => (
+                  <div key={i} className={`chat-message ${msg.role}`}>
+                    <div className="message-bubble">{msg.content}</div>
+                  </div>
+                ))
+              )}
+              {isChatLoading && (
+                <div className="chat-message assistant">
+                  <div className="message-bubble loading"><Loader2 size={16} className="spin-icon" /> 답변 작성 중...</div>
+                </div>
+              )}
+            </div>
+
+            <div className="chat-input-area">
+              <input 
+                type="text" 
+                value={chatInput} 
+                onChange={e => setChatInput(e.target.value)} 
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleSendChat(chatInput);
+                }}
+                placeholder="질문을 입력하세요..." 
+                disabled={isChatLoading}
+              />
+              <button onClick={() => handleSendChat(chatInput)} disabled={isChatLoading || !chatInput.trim()}>
+                <Send size={18} />
+              </button>
+            </div>
           </div>
         )}
 
@@ -637,7 +705,7 @@ export const MatchTerminal: React.FC = () => {
           { id: 'home', label: '홈', icon: LayoutGrid },
           { id: 'analysis', label: '분석', icon: Cpu },
           { id: 'strategy', label: '베팅', icon: ExternalLink },
-          { id: 'result', label: '결과', icon: Trophy },
+          { id: 'chat', label: '채팅', icon: MessageSquare },
           { id: 'profile', label: '내정보', icon: User }
         ].map(menu => {
           const Icon = menu.icon;
@@ -1455,6 +1523,133 @@ export const MatchTerminal: React.FC = () => {
         /* Notifications View Styles */
         .notifications-view-wrapper {
           padding: 1.25rem;
+        }
+
+        /* Chat View Styles */
+        .chat-view-wrapper {
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+          padding: 1rem;
+        }
+        .chat-header {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          margin-bottom: 1rem;
+        }
+        .chat-header h3 {
+          margin: 0;
+          font-size: 1.1rem;
+        }
+        .chat-history-container {
+          flex: 1;
+          overflow-y: auto;
+          background: rgba(255, 255, 255, 0.02);
+          border-radius: 0.5rem;
+          padding: 1rem;
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        }
+        .chat-empty-state {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          height: 100%;
+          color: #888;
+        }
+        .bot-icon {
+          color: #555;
+          margin-bottom: 1rem;
+        }
+        .chat-suggestions {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+          margin-top: 1.5rem;
+          width: 100%;
+        }
+        .suggestion-btn {
+          background: rgba(0, 230, 118, 0.1);
+          border: 1px solid rgba(0, 230, 118, 0.3);
+          color: #00e676;
+          padding: 0.75rem;
+          border-radius: 0.5rem;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .suggestion-btn:hover {
+          background: rgba(0, 230, 118, 0.2);
+        }
+        .chat-message {
+          display: flex;
+          flex-direction: column;
+        }
+        .chat-message.user {
+          align-items: flex-end;
+        }
+        .chat-message.assistant {
+          align-items: flex-start;
+        }
+        .message-bubble {
+          max-width: 85%;
+          padding: 0.75rem 1rem;
+          border-radius: 1rem;
+          font-size: 0.95rem;
+          line-height: 1.4;
+          white-space: pre-wrap;
+        }
+        .chat-message.user .message-bubble {
+          background: #00e676;
+          color: #000;
+          border-bottom-right-radius: 0.25rem;
+        }
+        .chat-message.assistant .message-bubble {
+          background: rgba(255, 255, 255, 0.1);
+          color: #fff;
+          border-bottom-left-radius: 0.25rem;
+        }
+        .message-bubble.loading {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          color: #aaa;
+        }
+        .chat-input-area {
+          display: flex;
+          gap: 0.5rem;
+          margin-top: 1rem;
+        }
+        .chat-input-area input {
+          flex: 1;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          padding: 0.75rem 1rem;
+          border-radius: 2rem;
+          color: #fff;
+          outline: none;
+        }
+        .chat-input-area input:focus {
+          border-color: #00e676;
+        }
+        .chat-input-area button {
+          background: #00e676;
+          color: #000;
+          border: none;
+          width: 3rem;
+          height: 3rem;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+        }
+        .chat-input-area button:disabled {
+          background: #333;
+          color: #666;
+          cursor: not-allowed;
         }
         .notif-box-container {
           background: #141414;
