@@ -10,7 +10,18 @@ const getLeagueAbbr = (id: number, name: string): string => {
     case 140: return 'LALIGA';
     case 78: return 'BUND';
     case 61: return 'LIGUE1';
-    case 292: return 'KLEAGUE';
+    case 135: return 'SERIEA';
+    case 2: return 'UCL';
+    case 3: return 'UEL';
+    case 292: return 'K1';
+    case 293: return 'K2';
+    case 98: return 'J1';
+    case 169: return 'CSL';
+    case 253: return 'MLS';
+    case 71: return 'BRA1';
+    case 128: return 'ARG1';
+    case 1: return 'WC';
+    case 17: return 'ACL';
     default: return name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase();
   }
 };
@@ -47,15 +58,31 @@ export async function fetchTodayMatches(): Promise<MatchData[]> {
     const todayDate = localISOTime.split('T')[0];
 
     // API-Football v3 accepts only ONE league per request
-    const leagueIds = [39, 140, 78, 61, 292];
-    const season = '2025';
+    const leagueConfigs = [
+      { id: 39, season: '2025' }, // EPL
+      { id: 140, season: '2025' }, // 라리가
+      { id: 78, season: '2025' }, // 분데스리가
+      { id: 61, season: '2025' }, // 리그1
+      { id: 135, season: '2025' }, // 세리에A
+      { id: 2, season: '2025' }, // 챔피언스리그
+      { id: 3, season: '2025' }, // 유로파리그
+      { id: 292, season: '2025' }, // K리그1
+      { id: 293, season: '2025' }, // K리그2
+      { id: 98, season: '2025' }, // J리그
+      { id: 169, season: '2025' }, // 중국 슈퍼리그
+      { id: 253, season: '2025' }, // MLS
+      { id: 71, season: '2025' }, // 브라질 세리에A
+      { id: 128, season: '2025' }, // 아르헨티나 프리메라
+      { id: 1, season: '2026' }, // FIFA 월드컵 2026
+      { id: 17, season: '2025' } // AFC 챔피언스리그
+    ];
 
-    console.log(`[API_FOOTBALL] Fetching fixtures for Date: ${todayDate}, Leagues: ${leagueIds.join(',')}, Season: ${season}`);
+    console.log(`[API_FOOTBALL] Fetching fixtures for Date: ${todayDate}, ${leagueConfigs.length} leagues`);
 
     // 1. Fetch Today's Fixtures (per-league, parallel)
-    const fixturePromises = leagueIds.map(leagueId =>
+    const fixturePromises = leagueConfigs.map(config =>
       fetch(
-        `${BASE_URL}/fixtures?date=${todayDate}&league=${leagueId}&season=${season}`,
+        `${BASE_URL}/fixtures?date=${todayDate}&league=${config.id}&season=${config.season}`,
         {
           method: 'GET',
           headers: {
@@ -65,14 +92,14 @@ export async function fetchTodayMatches(): Promise<MatchData[]> {
         }
       ).then(async res => {
         if (!res.ok) {
-          console.warn(`[API_FOOTBALL] League ${leagueId} fetch failed: ${res.status} ${res.statusText}`);
+          console.warn(`[API_FOOTBALL] League ${config.id} fetch failed: ${res.status} ${res.statusText}`);
           return [];
         }
         const json = await res.json();
-        console.log(`[API_FOOTBALL] League ${leagueId}: ${json.response?.length ?? 0} fixtures, errors: ${JSON.stringify(json.errors || {})}`);
+        console.log(`[API_FOOTBALL] League ${config.id}: ${json.response?.length ?? 0} fixtures, errors: ${JSON.stringify(json.errors || {})}`);
         return json.response || [];
       }).catch(err => {
-        console.warn(`[API_FOOTBALL] League ${leagueId} error:`, err);
+        console.warn(`[API_FOOTBALL] League ${config.id} error:`, err);
         return [];
       })
     );
@@ -89,44 +116,53 @@ export async function fetchTodayMatches(): Promise<MatchData[]> {
 
     // 2. Fetch Odds for Today
     console.log(`[API_FOOTBALL] Fetching odds for today...`);
-    const oddsRes = await fetch(
-      `${BASE_URL}/odds?date=${todayDate}&season=${season}`,
-      {
-        method: 'GET',
-        headers: {
-          'x-apisports-key': API_KEY,
-        },
-        next: { revalidate: 3600 }
-      }
-    );
-
     const oddsMap: Record<number, { win: number; draw: number; loss: number }> = {};
-    if (oddsRes.ok) {
-      const oddsJson = await oddsRes.json();
-      const oddsList = oddsJson.response || [];
-      
-      for (const item of oddsList) {
-        const fixtureId = item.fixture.id;
-        const bookmaker = item.bookmakers.find((b: any) => b.name === 'Bet365') || item.bookmakers[0];
-        if (bookmaker) {
-          const bet = bookmaker.bets.find((b: any) => b.name === 'Match Winner');
-          if (bet) {
-            const homeOdd = bet.values.find((v: any) => v.value === 'Home')?.odd;
-            const drawOdd = bet.values.find((v: any) => v.value === 'Draw')?.odd;
-            const awayOdd = bet.values.find((v: any) => v.value === 'Away')?.odd;
-            if (homeOdd && drawOdd && awayOdd) {
-              oddsMap[fixtureId] = {
-                win: parseFloat(homeOdd),
-                draw: parseFloat(drawOdd),
-                loss: parseFloat(awayOdd)
-              };
+
+    const fetchSeasonOdds = async (seasonStr: string) => {
+      try {
+        const oddsRes = await fetch(
+          `${BASE_URL}/odds?date=${todayDate}&season=${seasonStr}`,
+          {
+            method: 'GET',
+            headers: {
+              'x-apisports-key': API_KEY,
+            },
+            next: { revalidate: 3600 }
+          }
+        );
+
+        if (oddsRes.ok) {
+          const oddsJson = await oddsRes.json();
+          const oddsList = oddsJson.response || [];
+          
+          for (const item of oddsList) {
+            const fixtureId = item.fixture.id;
+            const bookmaker = item.bookmakers.find((b: any) => b.name === 'Bet365') || item.bookmakers[0];
+            if (bookmaker) {
+              const bet = bookmaker.bets.find((b: any) => b.name === 'Match Winner');
+              if (bet) {
+                const homeOdd = bet.values.find((v: any) => v.value === 'Home')?.odd;
+                const drawOdd = bet.values.find((v: any) => v.value === 'Draw')?.odd;
+                const awayOdd = bet.values.find((v: any) => v.value === 'Away')?.odd;
+                if (homeOdd && drawOdd && awayOdd) {
+                  oddsMap[fixtureId] = {
+                    win: parseFloat(homeOdd),
+                    draw: parseFloat(drawOdd),
+                    loss: parseFloat(awayOdd)
+                  };
+                }
+              }
             }
           }
+        } else {
+          console.warn(`[API_FOOTBALL] Odds query returned an error for season ${seasonStr}.`);
         }
+      } catch (err) {
+        console.error(`[API_FOOTBALL] Error fetching odds for season ${seasonStr}`, err);
       }
-    } else {
-      console.warn('[API_FOOTBALL] Odds query returned an error. Using fallbacks for odds.');
-    }
+    };
+
+    await Promise.all([fetchSeasonOdds('2025'), fetchSeasonOdds('2026')]);
 
     // 3. Map to MatchData interface
     const mappedMatches: MatchData[] = fixturesList.map((item: any, index: number) => {
@@ -146,6 +182,7 @@ export async function fetchTodayMatches(): Promise<MatchData[]> {
       return {
         id: fixtureId.toString(),
         code,
+        sport: 'soccer',
         teams: {
           home: homeTeam.toUpperCase(),
           away: awayTeam.toUpperCase()
