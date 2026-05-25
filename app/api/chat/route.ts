@@ -22,7 +22,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
 
     // Fetch today's actual matches
     const matches = await fetchTodayMatches();
