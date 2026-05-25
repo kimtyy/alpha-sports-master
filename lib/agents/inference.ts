@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { AGENT_REGISTRY, AgentPersona } from './config';
 import { MatchData, AgentResult } from './orchestrator';
+import { getCityWeather, WeatherData } from '../data/weather';
 
 /*
  * ALPHA INFERENCE PROVIDER - POWERED BY GOOGLE GEMINI
@@ -18,7 +19,7 @@ export class AlphaInference {
     const persona = AGENT_REGISTRY[agentId];
     if (!persona) throw new Error(`Agent ${agentId} not found in registry.`);
 
-    const modelId = 'gemini-1.5-flash';
+    const modelId = agentId === 'alpha_consensus' ? 'gemini-2.5-pro' : 'gemini-2.0-flash';
     
     // Graceful fallback if API key is missing for demonstrations
     if (!process.env.GEMINI_API_KEY) {
@@ -41,7 +42,8 @@ export class AlphaInference {
 
     const model = genAI.getGenerativeModel({ model: modelId });
 
-    const prompt = this.buildPrompt(persona, match, context);
+    const weather = match.city ? await getCityWeather(match.city) : null;
+    const prompt = this.buildPrompt(persona, match, weather, context);
 
     try {
       const result = await model.generateContent(prompt);
@@ -71,7 +73,7 @@ export class AlphaInference {
     }
   }
 
-  private buildPrompt(persona: AgentPersona, match: MatchData, context?: string): string {
+  private buildPrompt(persona: AgentPersona, match: MatchData, weather: WeatherData | null, context?: string): string {
     let statsBlock = '';
     if (match.stats) {
       const h = match.stats.home;
@@ -83,6 +85,16 @@ export class AlphaInference {
       - 최근 맞대결: ${match.stats.headToHead}`;
     }
 
+    let weatherBlock = '';
+    if (weather && match.city) {
+      weatherBlock = `
+      [날씨 정보]
+      - 경기 장소: ${match.city}
+      - 기온: ${weather.temp}°C
+      - 강수 확률: ${weather.rain}%
+      - 풍속: ${weather.wind}km/h`;
+    }
+
     return `
       ${persona.prompt}
       
@@ -91,6 +103,7 @@ export class AlphaInference {
       - 리그: ${match.league}
       - 배당: 승(${match.odds.win}) / 무(${match.odds.draw}) / 패(${match.odds.loss})
       ${statsBlock}
+      ${weatherBlock}
       - 추가 컨텍스트: ${context || 'N/A'}
 
       [출력 규칙 - 반드시 준수할 것]

@@ -17,6 +17,7 @@ export interface MatchData {
   id: string;
   code: string;
   sport?: string;
+  city?: string;
   teams: { home: string; away: string };
   league: string;
   odds: { win: number; draw: number; loss: number };

@@ -172,6 +172,7 @@ export async function fetchTodayMatches(): Promise<MatchData[]> {
       const leagueName = item.league.name;
       const leagueId = item.league.id;
       const startTime = item.fixture.date;
+      const city = item.fixture.venue?.city || '';
 
       const odds = oddsMap[fixtureId] || getFallbackOdds(fixtureId);
       const leagueAbbr = getLeagueAbbr(leagueId, leagueName);
@@ -183,6 +184,7 @@ export async function fetchTodayMatches(): Promise<MatchData[]> {
         id: fixtureId.toString(),
         code,
         sport: 'soccer',
+        city,
         teams: {
           home: homeTeam.toUpperCase(),
           away: awayTeam.toUpperCase()
