@@ -919,7 +919,7 @@ export const MatchTerminal: React.FC = () => {
               {!session && (
                 <div className="auth-full-container">
                   <div className="auth-full-header">
-                    <Trophy size={40} color="#00e676" />
+                    <Trophy size={48} color="#00e676" />
                     <h2 className="auth-logo-text">ALPHA SPORTS</h2>
                     <h3 className="auth-title">
                       {authMode === 'signup' ? '회원가입' : '로그인'}
@@ -2068,6 +2068,9 @@ export const MatchTerminal: React.FC = () => {
           flex: 1;
           overflow-y: auto;
           display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+        }
 
         /* Profile Auth CSS */
         .profile-auth-section {
@@ -2080,6 +2083,7 @@ export const MatchTerminal: React.FC = () => {
           border-radius: 0.75rem;
           border: 1px solid rgba(255, 255, 255, 0.05);
         }
+        
         /* New Full Auth Form CSS */
         .auth-full-container {
           display: flex;
@@ -2087,49 +2091,53 @@ export const MatchTerminal: React.FC = () => {
           align-items: center;
           justify-content: center;
           height: 100%;
-          padding: 2rem 1rem;
+          padding: 24px;
+          gap: 16px;
         }
         .auth-full-header {
           display: flex;
           flex-direction: column;
           align-items: center;
-          margin-bottom: 2rem;
           text-align: center;
+          gap: 8px;
+          margin-bottom: 8px;
+        }
+        .auth-full-header svg {
+          width: 48px;
+          height: 48px;
         }
         .auth-logo-text {
-          font-size: 1.25rem;
-          font-weight: 900;
-          letter-spacing: 0.1em;
-          color: #00e676;
-          margin: 0.5rem 0 1rem 0;
+          font-size: 20px;
+          font-weight: 700;
+          color: #fff;
+          margin: 0;
         }
         .auth-title {
-          font-size: 1.75rem;
-          font-weight: bold;
+          font-size: 24px;
+          font-weight: 700;
           color: #fff;
-          margin: 0 0 0.5rem 0;
+          margin: 0;
         }
         .auth-subtitle {
-          font-size: 0.9rem;
-          color: #888;
+          font-size: 14px;
+          color: #aaa;
           margin: 0;
         }
         .auth-full-form {
           width: 100%;
-          max-width: 340px;
           display: flex;
           flex-direction: column;
-          gap: 1rem;
+          gap: 12px;
         }
         .auth-full-form input {
           width: 100%;
           background: #1a1a1a;
           border: 1px solid #333;
           color: #fff;
-          padding: 1rem;
+          padding: 14px 16px;
           border-radius: 12px;
           outline: none;
-          font-size: 0.95rem;
+          font-size: 16px;
           transition: border-color 0.2s;
         }
         .auth-full-form input:focus {
@@ -2137,34 +2145,34 @@ export const MatchTerminal: React.FC = () => {
         }
         .auth-full-btn {
           width: 100%;
-          padding: 1rem;
+          padding: 14px;
           border-radius: 12px;
-          font-size: 1rem;
+          font-size: 16px;
           cursor: pointer;
           border: none;
           transition: all 0.2s;
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 0.5rem;
+          gap: 8px;
         }
         .auth-full-btn.primary {
           background: #00e676;
           color: #000;
-          font-weight: bold;
+          font-weight: 700;
         }
         .auth-full-btn.google {
           background: transparent;
-          border: 1px solid #fff;
+          border: 1px solid #333;
           color: #fff;
-          font-weight: bold;
+          font-weight: 400;
         }
         .auth-divider {
           display: flex;
           align-items: center;
           text-align: center;
           color: #555;
-          margin: 0.5rem 0;
+          margin: 4px 0;
         }
         .auth-divider::before,
         .auth-divider::after {
@@ -2174,13 +2182,13 @@ export const MatchTerminal: React.FC = () => {
         }
         .auth-divider span {
           padding: 0 1rem;
-          font-size: 0.8rem;
+          font-size: 14px;
         }
         .auth-footer-text {
           text-align: center;
-          font-size: 0.85rem;
-          color: #888;
-          margin-top: 1rem;
+          font-size: 14px;
+          color: #aaa;
+          margin-top: 8px;
         }
         .auth-footer-text span {
           color: #00e676;
