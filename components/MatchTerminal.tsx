@@ -9,8 +9,9 @@ import {
   BarChart3, Globe, Star, Loader2, MousePointer2,
   CheckCircle2, Info, Wallet, BarChart, X, Menu,
   LineChart as LineChartIcon, SlidersHorizontal,
-  CalendarDays, Flame, Bell, User, ExternalLink, MessageSquare, Send, Bot
+  CalendarDays, Flame, Bell, User, ExternalLink, MessageSquare, Send, Bot, Heart
 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import { AgentResult, MatchData as BaseMatchData } from '@/lib/agents/orchestrator';
 import { MOCK_MATCHES } from '@/lib/data/matches';
 import { calcKelly, KellyResult } from '@/lib/kelly';
@@ -115,6 +116,90 @@ export const MatchTerminal: React.FC = () => {
       setIsChatLoading(false);
     }
   };
+
+  // Supabase Bookmark States
+  const [deviceId, setDeviceId] = useState<string>('');
+  const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
+  const [bookmarkedMatches, setBookmarkedMatches] = useState<any[]>([]);
+
+  useEffect(() => {
+    let id = localStorage.getItem('asm_device_id');
+    if (!id) {
+      id = 'dev_' + Math.random().toString(36).substring(2, 9) + Date.now();
+      localStorage.setItem('asm_device_id', id);
+    }
+    setDeviceId(id);
+
+    const fetchBookmarks = async () => {
+      const { data } = await supabase
+        .from('bookmarks')
+        .select('*')
+        .eq('device_id', id);
+      if (data) {
+        setBookmarkedIds(new Set(data.map(b => b.match_id)));
+        setBookmarkedMatches(data);
+      }
+    };
+    fetchBookmarks();
+  }, []);
+
+  const toggleBookmark = async (match: MatchData, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!deviceId) return;
+    
+    const isBookmarked = bookmarkedIds.has(match.id);
+    
+    if (isBookmarked) {
+      // Remove
+      setBookmarkedIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(match.id);
+        return newSet;
+      });
+      setBookmarkedMatches(prev => prev.filter(b => b.match_id !== match.id));
+      
+      await supabase
+        .from('bookmarks')
+        .delete()
+        .eq('device_id', deviceId)
+        .eq('match_id', match.id);
+    } else {
+      // Add
+      setBookmarkedIds(prev => new Set(prev).add(match.id));
+      
+      const newBookmark = {
+        device_id: deviceId,
+        match_id: match.id,
+        home_team: match.teams.home,
+        away_team: match.teams.away,
+        league: match.league,
+        predicted_score: match.previewScore || '',
+        kelly_percent: match.kellyResult?.fractionalKelly || 0,
+        is_value_bet: !!match.kellyResult?.isValueBet,
+        bet_date: new Date().toISOString().split('T')[0]
+      };
+      
+      const { data } = await supabase
+        .from('bookmarks')
+        .insert(newBookmark)
+        .select()
+        .single();
+        
+      if (data) {
+        setBookmarkedMatches(prev => [...prev, data]);
+      }
+    }
+  };
+
+  const updateBookmarkResult = async (id: string, isCorrect: boolean) => {
+    setBookmarkedMatches(prev => prev.map(b => b.id === id ? { ...b, is_correct: isCorrect } : b));
+    
+    await supabase
+      .from('bookmarks')
+      .update({ is_correct: isCorrect })
+      .eq('id', id);
+  };
+
 
   // Dynamic Notifications Data
   const notifications = useMemo(() => {
@@ -388,8 +473,17 @@ export const MatchTerminal: React.FC = () => {
                     >
                       <div className="card-header-row">
                         <span className="league-name">{sportEmoji} {getLeagueNameKorean(match.league)}</span>
-                        <div className={`decision-pill-badge ${isValue ? 'bet' : 'skip'}`}>
-                          {isValue ? 'BET ✓' : 'SKIP'}
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <button 
+                            className="bookmark-btn" 
+                            onClick={(e) => toggleBookmark(match, e)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                          >
+                            <Heart size={18} color={bookmarkedIds.has(match.id) ? '#ff3d00' : '#666'} fill={bookmarkedIds.has(match.id) ? '#ff3d00' : 'none'} />
+                          </button>
+                          <div className={`decision-pill-badge ${isValue ? 'bet' : 'skip'}`}>
+                            {isValue ? 'BET ✓' : 'SKIP'}
+                          </div>
                         </div>
                       </div>
 
@@ -690,13 +784,76 @@ export const MatchTerminal: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'profile' && (
-          <div className="dummy-tab-view-wrapper">
-            <User size={40} color="#00e676" />
-            <h3>내 정보 설정</h3>
-            <p>포트폴리오 리스크 성향 설정 및 계정 제미나이 엔진 상태를 동기화하고 있습니다.</p>
-          </div>
-        )}
+        {activeTab === 'profile' && (() => {
+          const thisMonthStr = new Date().toISOString().substring(0, 7);
+          const thisMonthMatches = bookmarkedMatches.filter(b => b.bet_date && b.bet_date.startsWith(thisMonthStr) && b.is_correct !== null);
+          const thisMonthHits = thisMonthMatches.filter(b => b.is_correct).length;
+          const thisMonthRate = thisMonthMatches.length > 0 ? Math.round((thisMonthHits / thisMonthMatches.length) * 100) : 0;
+          
+          const totalResolved = bookmarkedMatches.filter(b => b.is_correct !== null).length;
+          const totalHits = bookmarkedMatches.filter(b => b.is_correct).length;
+          const totalRate = totalResolved > 0 ? Math.round((totalHits / totalResolved) * 100) : 0;
+
+          return (
+            <div className="profile-view-wrapper">
+              <div className="profile-header">
+                <User size={20} color="#00e676" />
+                <h3>내 베팅 히스토리</h3>
+              </div>
+              
+              <div className="history-list custom-scrollbar">
+                {bookmarkedMatches.length === 0 ? (
+                  <div className="history-empty-state">
+                    <p>아직 찜한 경기가 없습니다.</p>
+                  </div>
+                ) : (
+                  bookmarkedMatches.map(bm => (
+                    <div key={bm.id} className="history-item-card">
+                      <div className="history-date">{bm.bet_date}</div>
+                      <div className="history-match">
+                        <span className="history-league">{getLeagueNameKorean(bm.league)}</span>
+                        <span>{bm.home_team} vs {bm.away_team}</span>
+                      </div>
+                      <div className="history-actions">
+                        <button 
+                          className={`result-btn hit ${bm.is_correct === true ? 'active' : ''}`}
+                          onClick={() => updateBookmarkResult(bm.id, true)}
+                        >
+                          ✅ 적중
+                        </button>
+                        <button 
+                          className={`result-btn miss ${bm.is_correct === false ? 'active' : ''}`}
+                          onClick={() => updateBookmarkResult(bm.id, false)}
+                        >
+                          ❌ 꽝
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="history-stats">
+                <div className="stat-box">
+                  <span className="stat-label">총 찜</span>
+                  <span className="stat-value">{bookmarkedMatches.length}</span>
+                </div>
+                <div className="stat-box">
+                  <span className="stat-label">적중</span>
+                  <span className="stat-value">{totalHits}</span>
+                </div>
+                <div className="stat-box">
+                  <span className="stat-label">전체 적중률</span>
+                  <span className="stat-value">{totalRate}%</span>
+                </div>
+                <div className="stat-box">
+                  <span className="stat-label">이번달 적중률</span>
+                  <span className="stat-value">{thisMonthRate}%</span>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </main>
 
       {/* 5. Sticky Bottom Tabbar - Compact 60px height (Strictly Locked to Bottom) */}
@@ -1714,10 +1871,118 @@ export const MatchTerminal: React.FC = () => {
           color: #ffffff;
         }
         .notif-card-desc {
-          font-size: 0.8rem;
+          margin: 0;
+          font-size: 0.85rem;
           color: #aaaaaa;
           line-height: 1.5;
         }
+
+        /* Profile/History View Styles */
+        .profile-view-wrapper {
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+          padding: 1.25rem;
+        }
+        .profile-header {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          margin-bottom: 1rem;
+        }
+        .profile-header h3 {
+          margin: 0;
+          font-size: 1.1rem;
+        }
+        .history-list {
+          flex: 1;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+        .history-empty-state {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 100%;
+          color: #888;
+        }
+        .history-item-card {
+          background: #141414;
+          border: 1px solid rgba(255, 255, 255, 0.04);
+          border-radius: 0.75rem;
+          padding: 1rem;
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+        .history-date {
+          font-size: 0.8rem;
+          color: #888;
+        }
+        .history-match {
+          display: flex;
+          flex-direction: column;
+          gap: 0.25rem;
+          font-size: 0.95rem;
+          font-weight: 600;
+        }
+        .history-league {
+          font-size: 0.75rem;
+          color: #00e676;
+        }
+        .history-actions {
+          display: flex;
+          gap: 0.5rem;
+          margin-top: 0.25rem;
+        }
+        .result-btn {
+          flex: 1;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: #ccc;
+          padding: 0.6rem;
+          border-radius: 0.5rem;
+          cursor: pointer;
+          font-size: 0.85rem;
+          transition: all 0.2s;
+        }
+        .result-btn.hit.active {
+          background: rgba(0, 230, 118, 0.15);
+          border-color: #00e676;
+          color: #00e676;
+        }
+        .result-btn.miss.active {
+          background: rgba(255, 61, 0, 0.15);
+          border-color: #ff3d00;
+          color: #ff3d00;
+        }
+        .history-stats {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 0.75rem;
+          margin-top: 1rem;
+          background: rgba(255,255,255,0.02);
+          padding: 1rem;
+          border-radius: 0.75rem;
+        }
+        .stat-box {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 0.25rem;
+        }
+        .stat-label {
+          font-size: 0.75rem;
+          color: #888;
+        }
+        .stat-value {
+          font-size: 1.1rem;
+          font-weight: 700;
+          color: #00e676;
+        }
+
 
         /* Dummy Tab View Styles */
         .dummy-tab-view-wrapper {
