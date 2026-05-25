@@ -2061,7 +2061,8 @@ export const MatchTerminal: React.FC = () => {
         }
         .auth-buttons {
           display: flex;
-          gap: 0.5rem;
+          flex-direction: column;
+          gap: 0.75rem;
           width: 100%;
         }
         .auth-btn {
@@ -2080,12 +2081,13 @@ export const MatchTerminal: React.FC = () => {
         }
         .auth-btn.outline {
           background: transparent;
-          border: 1px solid #444;
-          color: #ccc;
+          border: 1px solid #00e676;
+          color: #00e676;
         }
         .auth-btn.google {
-          background: #fff;
-          color: #000;
+          background: transparent;
+          border: 1px solid #fff;
+          color: #fff;
           font-weight: bold;
         }
         .auth-btn.text {
