@@ -117,31 +117,120 @@ export const MatchTerminal: React.FC = () => {
     }
   };
 
+  // Auth & Profile States
+  const [session, setSession] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
+  const [authMode, setAuthMode] = useState<'login' | 'signup' | 'none'>('none');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+
   // Supabase Bookmark States
   const [deviceId, setDeviceId] = useState<string>('');
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
   const [bookmarkedMatches, setBookmarkedMatches] = useState<any[]>([]);
 
   useEffect(() => {
-    let id = localStorage.getItem('asm_device_id');
-    if (!id) {
-      id = 'dev_' + Math.random().toString(36).substring(2, 9) + Date.now();
-      localStorage.setItem('asm_device_id', id);
+    let localId = localStorage.getItem('asm_device_id');
+    if (!localId) {
+      localId = 'dev_' + Math.random().toString(36).substring(2, 9) + Date.now();
+      localStorage.setItem('asm_device_id', localId);
     }
-    setDeviceId(id);
+    const safeLocalId = localId;
 
-    const fetchBookmarks = async () => {
-      const { data } = await supabase
-        .from('bookmarks')
-        .select('*')
-        .eq('device_id', id);
+    const fetchBookmarks = async (targetId: string) => {
+      const { data } = await supabase.from('bookmarks').select('*').eq('device_id', targetId);
       if (data) {
         setBookmarkedIds(new Set(data.map(b => b.match_id)));
         setBookmarkedMatches(data);
+      } else {
+        setBookmarkedIds(new Set());
+        setBookmarkedMatches([]);
       }
     };
-    fetchBookmarks();
+
+    const fetchProfile = async (user: any) => {
+      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+      if (data) {
+        setProfile(data);
+        setCapital(Number(data.capital));
+      } else {
+        const newProfile = { id: user.id, email: user.email, nickname: 'User_' + Math.random().toString(36).substring(2,6), capital: 1000000, grade: 'free' };
+        await supabase.from('profiles').insert(newProfile);
+        setProfile(newProfile);
+        setCapital(1000000);
+      }
+    };
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) {
+        setDeviceId(session.user.id);
+        fetchBookmarks(session.user.id);
+        fetchProfile(session.user);
+      } else {
+        setDeviceId(safeLocalId);
+        fetchBookmarks(safeLocalId);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setSession(session);
+      if (session) {
+        const userId = session.user.id;
+        setDeviceId(userId);
+        
+        if (safeLocalId) {
+          const { data: localBookmarks } = await supabase.from('bookmarks').select('id').eq('device_id', safeLocalId);
+          if (localBookmarks && localBookmarks.length > 0) {
+            await supabase.from('bookmarks').update({ device_id: userId }).eq('device_id', safeLocalId);
+          }
+        }
+        
+        fetchBookmarks(userId);
+        fetchProfile(session.user);
+      } else {
+        setDeviceId(safeLocalId);
+        fetchBookmarks(safeLocalId);
+        setProfile(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  const handleEmailAuth = async () => {
+    setAuthError('');
+    if (authMode === 'signup') {
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) setAuthError(error.message);
+      else {
+        alert('회원가입이 완료되었습니다. 로그인해주세요.');
+        setAuthMode('login');
+      }
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) setAuthError(error.message);
+      else setAuthMode('none');
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
+
+  const updateCapital = async (newVal: number) => {
+    setCapital(newVal);
+    if (session && profile) {
+      setProfile({ ...profile, capital: newVal });
+      await supabase.from('profiles').update({ capital: newVal }).eq('id', session.user.id);
+    }
+  };
+
 
   const toggleBookmark = async (match: MatchData, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -556,7 +645,7 @@ export const MatchTerminal: React.FC = () => {
                       <input 
                         type="number"
                         value={capital}
-                        onChange={(e) => setCapital(Math.max(0, parseInt(e.target.value) || 0))}
+                        onChange={(e) => updateCapital(Math.max(0, parseInt(e.target.value) || 0))}
                       />
                       <span className="unit">원</span>
                     </div>
@@ -799,6 +888,56 @@ export const MatchTerminal: React.FC = () => {
               <div className="profile-header">
                 <User size={20} color="#00e676" />
                 <h3>내 베팅 히스토리</h3>
+              </div>
+
+              <div className="profile-auth-section">
+                {!session ? (
+                  <div className="auth-guest-box">
+                    <p className="auth-desc">로그인하고 기기 간 찜 내역을 동기화하세요!</p>
+                    {authMode === 'none' ? (
+                      <div className="auth-buttons">
+                        <button className="auth-btn outline" onClick={() => setAuthMode('login')}>이메일 로그인</button>
+                        <button className="auth-btn google" onClick={handleGoogleLogin}>Google 로그인</button>
+                      </div>
+                    ) : (
+                      <div className="auth-form">
+                        <input type="email" placeholder="이메일" value={email} onChange={e => setEmail(e.target.value)} />
+                        <input type="password" placeholder="비밀번호" value={password} onChange={e => setPassword(e.target.value)} />
+                        {authError && <p className="auth-error">{authError}</p>}
+                        <div className="auth-buttons">
+                          <button className="auth-btn primary" onClick={handleEmailAuth}>
+                            {authMode === 'login' ? '로그인' : '회원가입'}
+                          </button>
+                          <button className="auth-btn text" onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}>
+                            {authMode === 'login' ? '회원가입 하기' : '로그인으로 돌아가기'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="auth-user-box">
+                    <div className="user-info">
+                      <span className="user-nickname">{profile?.nickname || '사용자'}</span>
+                      <span className="user-email">{session.user.email}</span>
+                      <span className={`user-grade ${profile?.grade === 'premium' ? 'premium' : ''}`}>
+                        {profile?.grade === 'premium' ? '👑 Premium' : '⭐ 일반 회원'}
+                      </span>
+                    </div>
+                    
+                    <div className="profile-capital-setting">
+                      <span className="label">기본 자본금 설정</span>
+                      <div className="input-group">
+                        <input type="number" value={capital} onChange={e => updateCapital(Math.max(0, parseInt(e.target.value) || 0))} />
+                        <span>원</span>
+                      </div>
+                    </div>
+
+                    <div className="user-actions">
+                      <button className="auth-btn outline sm" onClick={handleLogout}>로그아웃</button>
+                    </div>
+                  </div>
+                )}
               </div>
               
               <div className="history-list custom-scrollbar">
@@ -1898,6 +2037,147 @@ export const MatchTerminal: React.FC = () => {
           flex: 1;
           overflow-y: auto;
           display: flex;
+
+        /* Profile Auth CSS */
+        .profile-auth-section {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+          margin-bottom: 1rem;
+          background: rgba(255, 255, 255, 0.02);
+          padding: 1rem;
+          border-radius: 0.75rem;
+          border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .auth-guest-box {
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+          align-items: center;
+        }
+        .auth-desc {
+          font-size: 0.85rem;
+          color: #888;
+        }
+        .auth-buttons {
+          display: flex;
+          gap: 0.5rem;
+          width: 100%;
+        }
+        .auth-btn {
+          flex: 1;
+          padding: 0.6rem;
+          border-radius: 0.5rem;
+          font-size: 0.85rem;
+          cursor: pointer;
+          border: none;
+          transition: all 0.2s;
+        }
+        .auth-btn.primary {
+          background: #00e676;
+          color: #000;
+          font-weight: bold;
+        }
+        .auth-btn.outline {
+          background: transparent;
+          border: 1px solid #444;
+          color: #ccc;
+        }
+        .auth-btn.google {
+          background: #fff;
+          color: #000;
+          font-weight: bold;
+        }
+        .auth-btn.text {
+          background: transparent;
+          color: #888;
+        }
+        .auth-btn.sm {
+          padding: 0.4rem;
+          font-size: 0.8rem;
+        }
+        .auth-form {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+          width: 100%;
+        }
+        .auth-form input {
+          background: rgba(0,0,0,0.3);
+          border: 1px solid #333;
+          color: #fff;
+          padding: 0.6rem;
+          border-radius: 0.5rem;
+        }
+        .auth-error {
+          color: #ff3d00;
+          font-size: 0.75rem;
+          margin: 0;
+        }
+        .auth-user-box {
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+        .user-info {
+          display: flex;
+          flex-direction: column;
+          gap: 0.25rem;
+        }
+        .user-nickname {
+          font-size: 1.1rem;
+          font-weight: bold;
+          color: #fff;
+        }
+        .user-email {
+          font-size: 0.85rem;
+          color: #888;
+        }
+        .user-grade {
+          font-size: 0.75rem;
+          color: #ccc;
+          margin-top: 0.25rem;
+          display: inline-block;
+          background: rgba(255,255,255,0.1);
+          padding: 0.2rem 0.5rem;
+          border-radius: 0.25rem;
+          width: fit-content;
+        }
+        .user-grade.premium {
+          background: rgba(0, 230, 118, 0.2);
+          color: #00e676;
+        }
+        .profile-capital-setting {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          background: rgba(0,0,0,0.2);
+          padding: 0.5rem 0.75rem;
+          border-radius: 0.5rem;
+        }
+        .profile-capital-setting .label {
+          font-size: 0.85rem;
+          color: #aaa;
+        }
+        .profile-capital-setting .input-group {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+        .profile-capital-setting input {
+          width: 80px;
+          background: transparent;
+          border: none;
+          color: #00e676;
+          font-weight: bold;
+          font-size: 1rem;
+          text-align: right;
+          border-bottom: 1px solid #333;
+        }
+        .profile-capital-setting input:focus {
+          outline: none;
+          border-bottom-color: #00e676;
+        }
           flex-direction: column;
           gap: 0.75rem;
         }
