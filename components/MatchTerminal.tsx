@@ -885,37 +885,13 @@ export const MatchTerminal: React.FC = () => {
 
           return (
             <div className="profile-view-wrapper">
-              <div className="profile-header">
+              <div className="profile-header" style={{ display: session ? 'flex' : 'none' }}>
                 <User size={20} color="#00e676" />
                 <h3>내 베팅 히스토리</h3>
               </div>
 
-              <div className="profile-auth-section">
-                {!session ? (
-                  <div className="auth-guest-box">
-                    <p className="auth-desc">로그인하고 기기 간 찜 내역을 동기화하세요!</p>
-                    {authMode === 'none' ? (
-                      <div className="auth-buttons">
-                        <button className="auth-btn outline" onClick={() => setAuthMode('login')}>이메일 로그인</button>
-                        <button className="auth-btn google" onClick={handleGoogleLogin}>Google 로그인</button>
-                      </div>
-                    ) : (
-                      <div className="auth-form">
-                        <input type="email" placeholder="이메일" value={email} onChange={e => setEmail(e.target.value)} />
-                        <input type="password" placeholder="비밀번호" value={password} onChange={e => setPassword(e.target.value)} />
-                        {authError && <p className="auth-error">{authError}</p>}
-                        <div className="auth-buttons">
-                          <button className="auth-btn primary" onClick={handleEmailAuth}>
-                            {authMode === 'login' ? '로그인' : '회원가입'}
-                          </button>
-                          <button className="auth-btn text" onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}>
-                            {authMode === 'login' ? '회원가입 하기' : '로그인으로 돌아가기'}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
+              <div className="profile-auth-section" style={{ display: session ? 'flex' : 'none' }}>
+                {session && (
                   <div className="auth-user-box">
                     <div className="user-info">
                       <span className="user-nickname">{profile?.nickname || '사용자'}</span>
@@ -940,7 +916,62 @@ export const MatchTerminal: React.FC = () => {
                 )}
               </div>
               
-              <div className="history-list custom-scrollbar">
+              {!session && (
+                <div className="auth-full-container">
+                  <div className="auth-full-header">
+                    <Trophy size={40} color="#00e676" />
+                    <h2 className="auth-logo-text">ALPHA SPORTS</h2>
+                    <h3 className="auth-title">
+                      {authMode === 'signup' ? '회원가입' : '로그인'}
+                    </h3>
+                    <p className="auth-subtitle">찜한 경기와 베팅 히스토리를 저장하세요</p>
+                  </div>
+
+                  <div className="auth-full-form">
+                    <input 
+                      type="email" 
+                      placeholder="이메일 주소" 
+                      value={email} 
+                      onChange={e => setEmail(e.target.value)} 
+                    />
+                    <input 
+                      type="password" 
+                      placeholder="비밀번호" 
+                      value={password} 
+                      onChange={e => setPassword(e.target.value)} 
+                    />
+                    {authError && <p className="auth-error">{authError}</p>}
+                    
+                    <button className="auth-full-btn primary" onClick={handleEmailAuth}>
+                      {authMode === 'signup' ? '회원가입' : '로그인'}
+                    </button>
+
+                    <div className="auth-divider">
+                      <span>또는</span>
+                    </div>
+
+                    <button className="auth-full-btn google" onClick={handleGoogleLogin}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                      </svg>
+                      Google로 계속하기
+                    </button>
+
+                    <div className="auth-footer-text">
+                      {authMode === 'signup' ? (
+                        <>이미 계정이 있으신가요? <span onClick={() => setAuthMode('login')}>로그인</span></>
+                      ) : (
+                        <>계정이 없으신가요? <span onClick={() => setAuthMode('signup')}>회원가입</span></>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              <div className="history-list custom-scrollbar" style={{ display: session ? 'flex' : 'none' }}>
                 {bookmarkedMatches.length === 0 ? (
                   <div className="history-empty-state">
                     <p>아직 찜한 경기가 없습니다.</p>
@@ -2049,24 +2080,122 @@ export const MatchTerminal: React.FC = () => {
           border-radius: 0.75rem;
           border: 1px solid rgba(255, 255, 255, 0.05);
         }
-        .auth-guest-box {
+        /* New Full Auth Form CSS */
+        .auth-full-container {
           display: flex;
           flex-direction: column;
-          gap: 0.75rem;
           align-items: center;
+          justify-content: center;
+          height: 100%;
+          padding: 2rem 1rem;
         }
-        .auth-desc {
+        .auth-full-header {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          margin-bottom: 2rem;
+          text-align: center;
+        }
+        .auth-logo-text {
+          font-size: 1.25rem;
+          font-weight: 900;
+          letter-spacing: 0.1em;
+          color: #00e676;
+          margin: 0.5rem 0 1rem 0;
+        }
+        .auth-title {
+          font-size: 1.75rem;
+          font-weight: bold;
+          color: #fff;
+          margin: 0 0 0.5rem 0;
+        }
+        .auth-subtitle {
+          font-size: 0.9rem;
+          color: #888;
+          margin: 0;
+        }
+        .auth-full-form {
+          width: 100%;
+          max-width: 340px;
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        }
+        .auth-full-form input {
+          width: 100%;
+          background: #1a1a1a;
+          border: 1px solid #333;
+          color: #fff;
+          padding: 1rem;
+          border-radius: 12px;
+          outline: none;
+          font-size: 0.95rem;
+          transition: border-color 0.2s;
+        }
+        .auth-full-form input:focus {
+          border-color: #00e676;
+        }
+        .auth-full-btn {
+          width: 100%;
+          padding: 1rem;
+          border-radius: 12px;
+          font-size: 1rem;
+          cursor: pointer;
+          border: none;
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+        }
+        .auth-full-btn.primary {
+          background: #00e676;
+          color: #000;
+          font-weight: bold;
+        }
+        .auth-full-btn.google {
+          background: transparent;
+          border: 1px solid #fff;
+          color: #fff;
+          font-weight: bold;
+        }
+        .auth-divider {
+          display: flex;
+          align-items: center;
+          text-align: center;
+          color: #555;
+          margin: 0.5rem 0;
+        }
+        .auth-divider::before,
+        .auth-divider::after {
+          content: '';
+          flex: 1;
+          border-bottom: 1px solid #333;
+        }
+        .auth-divider span {
+          padding: 0 1rem;
+          font-size: 0.8rem;
+        }
+        .auth-footer-text {
+          text-align: center;
           font-size: 0.85rem;
           color: #888;
+          margin-top: 1rem;
         }
-        .auth-buttons {
-          display: flex;
-          flex-direction: column;
-          gap: 0.75rem;
-          width: 100%;
+        .auth-footer-text span {
+          color: #00e676;
+          cursor: pointer;
+          font-weight: bold;
+          margin-left: 0.25rem;
         }
+        .auth-error {
+          color: #ff3d00;
+          font-size: 0.8rem;
+          margin: 0;
+          text-align: center;
+        }
+
         .auth-btn {
-          flex: 1;
           padding: 0.6rem;
           border-radius: 0.5rem;
           font-size: 0.85rem;
@@ -2074,47 +2203,14 @@ export const MatchTerminal: React.FC = () => {
           border: none;
           transition: all 0.2s;
         }
-        .auth-btn.primary {
-          background: #00e676;
-          color: #000;
-          font-weight: bold;
-        }
         .auth-btn.outline {
           background: transparent;
           border: 1px solid #00e676;
           color: #00e676;
         }
-        .auth-btn.google {
-          background: transparent;
-          border: 1px solid #fff;
-          color: #fff;
-          font-weight: bold;
-        }
-        .auth-btn.text {
-          background: transparent;
-          color: #888;
-        }
         .auth-btn.sm {
           padding: 0.4rem;
           font-size: 0.8rem;
-        }
-        .auth-form {
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-          width: 100%;
-        }
-        .auth-form input {
-          background: rgba(0,0,0,0.3);
-          border: 1px solid #333;
-          color: #fff;
-          padding: 0.6rem;
-          border-radius: 0.5rem;
-        }
-        .auth-error {
-          color: #ff3d00;
-          font-size: 0.75rem;
-          margin: 0;
         }
         .auth-user-box {
           display: flex;
