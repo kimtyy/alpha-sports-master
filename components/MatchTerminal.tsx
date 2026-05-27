@@ -623,189 +623,205 @@ export const MatchTerminal: React.FC = () => {
 
         {activeTab === 'analysis' && (
           <div className="analysis-view-wrapper">
-            <div className="details-card-container">
-              <div className="details-match-header">
-                <span className="analysis-brand-tag">전략 전술 분석</span>
-                <h2 className="analysis-teams-title">
-                  {selectedMatch.teams.home} <span>VS</span> {selectedMatch.teams.away}
-                </h2>
+            {matches.length === 0 ? (
+              <div className="no-matches-screen" style={{ marginTop: '40px' }}>
+                <Flame size={40} className="no-match-glow-icon" />
+                <p className="no-match-primary">분석할 경기가 없습니다</p>
+                <span className="no-match-sub">오늘 진행되는 베트맨 지원 경기가 수집되면 실시간 AI 분석 기동이 가능합니다.</span>
               </div>
-
-              {activeKelly && (
-                <div className={`recommendation-banner ${activeKelly.isValueBet ? 'bet' : 'skip'}`}>
-                  <div className="banner-title">
-                    {activeKelly.isValueBet ? '베팅 추천' : '패스 추천'}
-                  </div>
-                  <div className="banner-desc">
-                    {consensus ? (
-                      consensus.findings[0]
-                    ) : (
-                      activeKelly.isValueBet 
-                        ? "최근 통계 기대 우위가 해외 기준배당을 초과하여 켈리 공식상 높은 에지가 형성되었습니다."
-                        : "기대 배당 확률 대비 기대 가치가 낮게 관측되어 리스크 관리를 위해 스킵을 권고합니다."
-                    )}
-                  </div>
+            ) : (
+              <div className="details-card-container">
+                <div className="details-match-header">
+                  <span className="analysis-brand-tag">전략 전술 분석</span>
+                  <h2 className="analysis-teams-title">
+                    {selectedMatch.teams.home} <span>VS</span> {selectedMatch.teams.away}
+                  </h2>
                 </div>
-              )}
 
-              {/* Capital Stake Calculator */}
-              {activeKelly && (
-                <div className="capital-calculator-card">
-                  <div className="capital-input-field">
-                    <span className="label">보유 자본금</span>
-                    <div className="input-group">
-                      <input 
-                        type="number"
-                        value={capital}
-                        onChange={(e) => updateCapital(Math.max(0, parseInt(e.target.value) || 0))}
-                      />
-                      <span className="unit">원</span>
+                {activeKelly && (
+                  <div className={`recommendation-banner ${activeKelly.isValueBet ? 'bet' : 'skip'}`}>
+                    <div className="banner-title">
+                      {activeKelly.isValueBet ? '베팅 추천' : '패스 추천'}
+                    </div>
+                    <div className="banner-desc">
+                      {consensus ? (
+                        consensus.findings[0]
+                      ) : (
+                        activeKelly.isValueBet 
+                          ? "최근 통계 기대 우위가 해외 기준배당을 초과하여 켈리 공식상 높은 에지가 형성되었습니다."
+                          : "기대 배당 확률 대비 기대 가치가 낮게 관측되어 리스크 관리를 위해 스킵을 권고합니다."
+                      )}
                     </div>
                   </div>
+                )}
 
-                  <div className="recommended-stake-output">
-                    <span className="output-label">추천 베팅액</span>
-                    <div className="output-value">
-                      <span className="amount">
-                        {activeKelly.isValueBet ? (capital * activeKelly.fractionalKelly).toLocaleString([], { maximumFractionDigits: 0 }) : '0'}
+                {/* Capital Stake Calculator */}
+                {activeKelly && (
+                  <div className="capital-calculator-card">
+                    <div className="capital-input-field">
+                      <span className="label">보유 자본금</span>
+                      <div className="input-group">
+                        <input 
+                          type="number"
+                          value={capital}
+                          onChange={(e) => updateCapital(Math.max(0, parseInt(e.target.value) || 0))}
+                        />
+                        <span className="unit">원</span>
+                      </div>
+                    </div>
+
+                    <div className="recommended-stake-output">
+                      <span className="output-label">추천 베팅액</span>
+                      <div className="output-value">
+                        <span className="amount">
+                          {activeKelly.isValueBet ? (capital * activeKelly.fractionalKelly).toLocaleString([], { maximumFractionDigits: 0 }) : '0'}
+                        </span>
+                        <span className="amount-unit">원</span>
+                      </div>
+                      <span className="fraction-label">
+                        (보수적 쿼터 켈리 비율 {(activeKelly.fractionalKelly * 100).toFixed(2)}% 적용액)
                       </span>
-                      <span className="amount-unit">원</span>
                     </div>
-                    <span className="fraction-label">
-                      (보수적 쿼터 켈리 비율 {(activeKelly.fractionalKelly * 100).toFixed(2)}% 적용액)
-                    </span>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Inference Engine Action Button */}
-              <button 
-                className={`analysis-engine-btn ${isInferring ? 'loading' : ''}`}
-                onClick={handleExecute}
-                disabled={isInferring}
-              >
-                {isInferring ? <Loader2 size={18} className="spin-icon" /> : <Zap size={18} fill="currentColor" />}
-                <span>{isInferring ? "실시간 분석 분석 도출 중..." : "AI 실시간 전술 분석 기동"}</span>
-              </button>
+                {/* Inference Engine Action Button */}
+                <button 
+                  className={`analysis-engine-btn ${isInferring ? 'loading' : ''}`}
+                  onClick={handleExecute}
+                  disabled={isInferring}
+                >
+                  {isInferring ? <Loader2 size={18} className="spin-icon" /> : <Zap size={18} fill="currentColor" />}
+                  <span>{isInferring ? "실시간 분석 분석 도출 중..." : "AI 실시간 전술 분석 기동"}</span>
+                </button>
 
-              {/* Details Agent Accordion */}
-              {(results.length > 0 || activeKelly) && (
-                <div className="agents-report-accordion">
-                  <button 
-                    onClick={() => setIsDetailsOpen(!isDetailsOpen)}
-                    className="accordion-toggle-btn"
-                  >
-                    <span>{isDetailsOpen ? '상세 리포트 및 지표 숨기기 ▲' : '상세 리포트 및 지표 더보기 ▼'}</span>
-                  </button>
+                {/* Details Agent Accordion */}
+                {(results.length > 0 || activeKelly) && (
+                  <div className="agents-report-accordion">
+                    <button 
+                      onClick={() => setIsDetailsOpen(!isDetailsOpen)}
+                      className="accordion-toggle-btn"
+                    >
+                      <span>{isDetailsOpen ? '상세 리포트 및 지표 숨기기 ▲' : '상세 리포트 및 지표 더보기 ▼'}</span>
+                    </button>
 
-                  <AnimatePresence>
-                    {isDetailsOpen && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="accordion-content-box"
-                      >
-                        <div className="metrics-column-layout">
-                          <div className="metric-box-card">
-                            <span className="box-label">예측 스코어</span>
-                            <span className="box-value highlighted">
-                              {consensus ? (consensus.predictedScore || selectedMatch.previewScore) : selectedMatch.previewScore}
-                            </span>
-                          </div>
-
-                          <div className="metric-box-card">
-                            <div className="metrics-header-row">
-                              <span className="box-label">종합 신뢰도</span>
-                              <span className="box-value font-neon">
-                                {((consensus ? consensus.confidence : 0.85) * 100).toFixed(1)}%
+                    <AnimatePresence>
+                      {isDetailsOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="accordion-content-box"
+                        >
+                          <div className="metrics-column-layout">
+                            <div className="metric-box-card">
+                              <span className="box-label">예측 스코어</span>
+                              <span className="box-value highlighted">
+                                {consensus ? (consensus.predictedScore || selectedMatch.previewScore) : selectedMatch.previewScore}
                               </span>
                             </div>
-                            <div className="progress-bar-track">
-                              <div 
-                                className="progress-bar-fill" 
-                                style={{ width: `${(consensus ? consensus.confidence : 0.85) * 100}%` }} 
-                              />
-                            </div>
-                          </div>
 
-                          <div className="metric-box-card">
-                            <span className="box-label">핵심 인사이트</span>
-                            <p className="insight-text-quote">
-                              "{consensus ? consensus.findings[1] : '공수 밸런스 및 xG 시뮬레이션 지수가 우세하여 포트폴리오 편입에 적합합니다.'}"
-                            </p>
-                          </div>
-
-                          {activeKelly && (
-                            <div className="kelly-detail-metrics-row">
-                              <div className="small-metric-pill">
-                                <span className="pill-label">이론 켈리</span>
-                                <span className="pill-value">{(activeKelly.kellyFraction * 100).toFixed(1)}%</span>
+                            <div className="metric-box-card">
+                              <div className="metrics-header-row">
+                                <span className="box-label">종합 신뢰도</span>
+                                <span className="box-value font-neon">
+                                  {((consensus ? consensus.confidence : 0.85) * 100).toFixed(1)}%
+                                </span>
                               </div>
-                              <div className="small-metric-pill">
-                                <span className="pill-label">에지 비율</span>
-                                <span className="pill-value text-blue">{(activeKelly.edge * 100).toFixed(1)}%</span>
-                              </div>
-                              <div className="small-metric-pill">
-                                <span className="pill-label">북메이커 확률</span>
-                                <span className="pill-value">{(activeKelly.impliedProb * 100).toFixed(1)}%</span>
+                              <div className="progress-bar-track">
+                                <div 
+                                  className="progress-bar-fill" 
+                                  style={{ width: `${(consensus ? consensus.confidence : 0.85) * 100}%` }} 
+                                />
                               </div>
                             </div>
-                          )}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              )}
-            </div>
+
+                            <div className="metric-box-card">
+                              <span className="box-label">핵심 인사이트</span>
+                              <p className="insight-text-quote">
+                                "{consensus ? consensus.findings[1] : '공수 밸런스 및 xG 시뮬레이션 지수가 우세하여 포트폴리오 편입에 적합합니다.'}"
+                              </p>
+                            </div>
+
+                            {activeKelly && (
+                              <div className="kelly-detail-metrics-row">
+                                <div className="small-metric-pill">
+                                  <span className="pill-label">이론 켈리</span>
+                                  <span className="pill-value">{(activeKelly.kellyFraction * 100).toFixed(1)}%</span>
+                                </div>
+                                <div className="small-metric-pill">
+                                  <span className="pill-label">에지 비율</span>
+                                  <span className="pill-value text-blue">{(activeKelly.edge * 100).toFixed(1)}%</span>
+                                </div>
+                                <div className="small-metric-pill">
+                                  <span className="pill-label">북메이커 확률</span>
+                                  <span className="pill-value">{(activeKelly.impliedProb * 100).toFixed(1)}%</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
         {activeTab === 'strategy' && (
           <div className="strategy-view-wrapper">
-            <div className="slip-main-card">
-              <div className="slip-card-header">
-                <Wallet size={20} color="#ffbf00" />
-                <span className="slip-title">베팅 전략 전표</span>
+            {matches.length === 0 ? (
+              <div className="no-matches-screen" style={{ marginTop: '40px' }}>
+                <Wallet size={40} className="no-match-glow-icon" style={{ color: '#666' }} />
+                <p className="no-match-primary">베팅할 경기가 없습니다</p>
+                <span className="no-match-sub">전술 포트폴리오를 구성할 축구 경기가 연동되면 베팅 전표 기능이 활성화됩니다.</span>
               </div>
-
-              <div className="slip-data-body">
-                <div className="slip-match-info">
-                  <span className="label">타겟 경기</span>
-                  <span className="value">{selectedMatch.teams.home} vs {selectedMatch.teams.away}</span>
+            ) : (
+              <div className="slip-main-card">
+                <div className="slip-card-header">
+                  <Wallet size={20} color="#ffbf00" />
+                  <span className="slip-title">베팅 전략 전표</span>
                 </div>
 
-                <div className="slip-pick-actions">
-                  {['WIN', 'DRAW', 'LOSS'].map(type => (
-                    <button 
-                      key={type}
-                      className={`pick-option-btn ${betPick === type ? 'selected' : ''}`}
-                      onClick={() => { setBetPick(type as any); setIsBetPlaced(false); }}
-                    >
-                      <span className="pick-label">{type === 'WIN' ? '승' : type === 'DRAW' ? '무' : '패'}</span>
-                      <span className="pick-odds">x{type === 'WIN' ? selectedMatch.odds.win : type === 'DRAW' ? selectedMatch.odds.draw : selectedMatch.odds.loss}</span>
-                    </button>
-                  ))}
-                </div>
+                <div className="slip-data-body">
+                  <div className="slip-match-info">
+                    <span className="label">타겟 경기</span>
+                    <span className="value">{selectedMatch.teams.home} vs {selectedMatch.teams.away}</span>
+                  </div>
 
-                <div className="slip-earning-meta">
-                  <span className="meta-label">예상 배당률</span>
-                  <span className="meta-value">
-                    {betPick ? `${(betPick === 'WIN' ? selectedMatch.odds.win : betPick === 'DRAW' ? selectedMatch.odds.draw : selectedMatch.odds.loss).toFixed(2)}배` : '-'}
-                  </span>
-                </div>
+                  <div className="slip-pick-actions">
+                    {['WIN', 'DRAW', 'LOSS'].map(type => (
+                      <button 
+                        key={type}
+                        className={`pick-option-btn ${betPick === type ? 'selected' : ''}`}
+                        onClick={() => { setBetPick(type as any); setIsBetPlaced(false); }}
+                      >
+                        <span className="pick-label">{type === 'WIN' ? '승' : type === 'DRAW' ? '무' : '패'}</span>
+                        <span className="pick-odds">x{type === 'WIN' ? selectedMatch.odds.win : type === 'DRAW' ? selectedMatch.odds.draw : selectedMatch.odds.loss}</span>
+                      </button>
+                    ))}
+                  </div>
 
-                <button 
-                  className={`slip-submit-btn ${isBetPlaced ? 'success' : ''}`}
-                  onClick={handlePlaceBet}
-                  disabled={!betPick || isBetPlaced}
-                >
-                  {isBetPlaced ? <CheckCircle2 size={20} /> : <Fingerprint size={20} />}
-                  <span>{isBetPlaced ? "전략 전표 접수 완료" : "베팅 전표 서명 및 승인"}</span>
-                </button>
+                  <div className="slip-earning-meta">
+                    <span className="meta-label">예상 배당률</span>
+                    <span className="meta-value">
+                      {betPick ? `${(betPick === 'WIN' ? selectedMatch.odds.win : betPick === 'DRAW' ? selectedMatch.odds.draw : selectedMatch.odds.loss).toFixed(2)}배` : '-'}
+                    </span>
+                  </div>
+
+                  <button 
+                    className={`slip-submit-btn ${isBetPlaced ? 'success' : ''}`}
+                    onClick={handlePlaceBet}
+                    disabled={!betPick || isBetPlaced}
+                  >
+                    {isBetPlaced ? <CheckCircle2 size={20} /> : <Fingerprint size={20} />}
+                    <span>{isBetPlaced ? "전략 전표 접수 완료" : "베팅 전표 서명 및 승인"}</span>
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
