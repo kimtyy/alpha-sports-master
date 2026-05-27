@@ -81,50 +81,5 @@ export const MOCK_MATCHES: EnrichedMockMatch[] = [
       away: { form: 'L-L-D-W-D', xG: 1.15, goalsScored: 5, goalsConceded: 6, winRate: 20 },
       headToHead: '최근 5경기 1승 3무 1패 동률'
     }
-  },
-  {
-    id: 'm6',
-    code: 'KBO-2026-OB-LG',
-    teams: { home: 'DOOSAN BEARS', away: 'LG TWINS' },
-    league: 'KBO League',
-    odds: { win: 1.75, draw: 9.00, loss: 2.10 },
-    startTime: '2026-04-12T18:30:00Z',
-    previewScore: '6:4',
-    sport: 'baseball',
-    stats: {
-      home: { form: 'W-W-L-W-W', xG: 1.2, goalsScored: 28, goalsConceded: 18, winRate: 65 },
-      away: { form: 'L-W-W-L-W', xG: 1.1, goalsScored: 22, goalsConceded: 20, winRate: 50 },
-      headToHead: '올 시즌 3승 2패 DOOSAN BEARS 우세'
-    }
-  },
-  {
-    id: 'm7',
-    code: 'MLB-2026-LAD-SF',
-    teams: { home: 'LA DODGERS', away: 'SF GIANTS' },
-    league: 'MLB',
-    odds: { win: 1.55, draw: 11.00, loss: 2.45 },
-    startTime: '2026-04-12T22:15:00Z',
-    previewScore: '8:3',
-    sport: 'baseball',
-    stats: {
-      home: { form: 'W-W-W-W-L', xG: 1.4, goalsScored: 35, goalsConceded: 12, winRate: 80 },
-      away: { form: 'L-L-W-W-L', xG: 0.9, goalsScored: 15, goalsConceded: 24, winRate: 40 },
-      headToHead: '최근 10경기 7승 3패 LA DODGERS 절대 우세'
-    }
-  },
-  {
-    id: 'm8',
-    code: 'NBA-2026-LAL-GSW',
-    teams: { home: 'LA LAKERS', away: 'GS WARRIORS' },
-    league: 'NBA',
-    odds: { win: 1.82, draw: 15.00, loss: 1.95 },
-    startTime: '2026-04-13T10:30:00Z',
-    previewScore: '112:108',
-    sport: 'basketball',
-    stats: {
-      home: { form: 'W-L-W-L-W', xG: 1.15, goalsScored: 560, goalsConceded: 540, winRate: 60 },
-      away: { form: 'L-W-L-W-L', xG: 1.12, goalsScored: 550, goalsConceded: 560, winRate: 40 },
-      headToHead: '최근 5경기 3승 2패 LA LAKERS 우세'
-    }
   }
 ];

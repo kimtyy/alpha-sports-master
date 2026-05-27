@@ -323,10 +323,13 @@ export const MatchTerminal: React.FC = () => {
       try {
         const res = await fetch('/api/matches');
         const json = await res.json();
-        if (json.success && json.data && json.data.length > 0) {
-          const enriched = enrichMatches(json.data);
+        if (json.success) {
+          const dataList = json.data || [];
+          const enriched = enrichMatches(dataList);
           setMatches(enriched);
-          setSelectedMatch(enriched[0]);
+          if (enriched.length > 0) {
+            setSelectedMatch(enriched[0]);
+          }
         }
       } catch (error) {
         console.error('라이브 경기 데이터를 불러오는데 실패하여 폴백 데이터를 유지합니다:', error);
