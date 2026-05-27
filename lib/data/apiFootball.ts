@@ -58,23 +58,16 @@ export async function fetchTodayMatches(): Promise<MatchData[]> {
     const todayDate = localISOTime.split('T')[0];
 
     // API-Football v3 accepts only ONE league per request
+    // Filtered to Betman supported leagues only:
+    // - K League 1/2, Premier League, La Liga, Bundesliga, Serie A, Ligue 1
     const leagueConfigs = [
       { id: 39, season: '2025' }, // EPL
       { id: 140, season: '2025' }, // 라리가
       { id: 78, season: '2025' }, // 분데스리가
       { id: 61, season: '2025' }, // 리그1
       { id: 135, season: '2025' }, // 세리에A
-      { id: 2, season: '2025' }, // 챔피언스리그
-      { id: 3, season: '2025' }, // 유로파리그
       { id: 292, season: '2025' }, // K리그1
-      { id: 293, season: '2025' }, // K리그2
-      { id: 98, season: '2025' }, // J리그
-      { id: 169, season: '2025' }, // 중국 슈퍼리그
-      { id: 253, season: '2025' }, // MLS
-      { id: 71, season: '2025' }, // 브라질 세리에A
-      { id: 128, season: '2025' }, // 아르헨티나 프리메라
-      { id: 1, season: '2026' }, // FIFA 월드컵 2026
-      { id: 17, season: '2025' } // AFC 챔피언스리그
+      { id: 293, season: '2025' }  // K리그2
     ];
 
     console.log(`[API_FOOTBALL] Fetching fixtures for Date: ${todayDate}, ${leagueConfigs.length} leagues`);
