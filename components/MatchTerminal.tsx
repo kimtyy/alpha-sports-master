@@ -74,6 +74,15 @@ export const MatchTerminal: React.FC = () => {
   const [selectedMatch, setSelectedMatch] = useState<MatchData>(enrichMatches(MOCK_MATCHES)[0]);
   const [betPick, setBetPick] = useState<'WIN' | 'DRAW' | 'LOSS' | null>(null);
   const [isBetPlaced, setIsBetPlaced] = useState(false);
+
+  const formattedToday = useMemo(() => {
+    const d = new Date();
+    const month = d.getMonth() + 1;
+    const date = d.getDate();
+    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+    const day = dayNames[d.getDay()];
+    return `${month}월 ${date}일 (${day})`;
+  }, []);
   
   // Navigation & Filtering States
   const [activeTab, setActiveTab] = useState<'home' | 'analysis' | 'strategy' | 'chat' | 'profile' | 'notifications'>('home');
@@ -486,7 +495,7 @@ export const MatchTerminal: React.FC = () => {
 
         {/* Row 2: Today's Pick Bar */}
         <div className="recommend-bar">
-          <span className="recommend-title">오늘의 추천</span>
+          <span className="recommend-title">{formattedToday} 추천</span>
           <span 
             className={`recommend-action ${showOnlyValueBets ? 'filtering-active' : ''}`}
             onClick={() => {
@@ -531,7 +540,7 @@ export const MatchTerminal: React.FC = () => {
           <div className="home-view-wrapper">
             <div className="today-section-header">
               <span className="section-title">
-                {showOnlyValueBets ? 'AI 추천 분석 매치' : searchQuery ? `'${searchQuery}' 검색 결과` : '오늘 경기'}
+                {showOnlyValueBets ? 'AI 추천 분석 매치' : searchQuery ? `'${searchQuery}' 검색 결과` : `${formattedToday} 경기`}
               </span>
               {(showOnlyValueBets || searchQuery) && (
                 <span className="section-link reset" onClick={resetToHome}>필터 해제</span>
