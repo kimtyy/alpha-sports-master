@@ -103,8 +103,8 @@ export async function fetchTodayMatches(): Promise<MatchData[]> {
     console.log(`[API_FOOTBALL] Total fixtures found: ${fixturesList.length}`);
 
     if (fixturesList.length === 0) {
-      console.warn('[API_FOOTBALL] No fixtures found for today across all leagues. Returning MOCK_MATCHES.');
-      return MOCK_MATCHES;
+      console.log('[API_FOOTBALL] No fixtures found for today across all leagues. Returning empty list.');
+      return [];
     }
 
     // 2. Fetch Odds for Today
@@ -194,7 +194,7 @@ export async function fetchTodayMatches(): Promise<MatchData[]> {
     return mappedMatches;
 
   } catch (error) {
-    console.error('[API_FOOTBALL] Error in fetchTodayMatches. Performing graceful fallback to MOCK_MATCHES.', error);
-    return MOCK_MATCHES;
+    console.error('[API_FOOTBALL] Error in fetchTodayMatches. Returning empty list [].', error);
+    return [];
   }
 }
