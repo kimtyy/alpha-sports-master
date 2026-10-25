@@ -29,3 +29,13 @@ Node regression tests cover provider failure, Korean date rollover, eight-day re
 5. Introduce a unique fixture settlement ledger and transactionally update Elo once per fixture, with chronological replay and handling of corrected scores. Existing name-keyed ratings need stable provider team IDs.
 6. Implement numerical probability models and chronological holdout evaluation (Brier/log loss/calibration), compare against margin-adjusted bookmaker baselines, then restore recommendations only after validation. LLM roles are not trained Poisson/ML models.
 7. Review and test this branch before promotion. No merge, deployment, credential rotation or DB migration was performed by this patch.
+
+## Live schema inspection, 2026-10-26 KST
+
+Supabase project zowkcuccvdlwqcckwkpm was accessed through the connected plugin. Exact counts: bookmarks=0, profiles=0, match_analyses=0, elo_ratings=0. All four tables have RLS enabled and NO policies, with broad default anon/authenticated grants. This blocks normal row access; it is not evidence that user isolation works. No production schema or records were changed by this inspection.
+
+- bookmarks has no updated_at column. Removed that field from settlement writes and added a regression assertion.
+- elo_ratings uses elo_score, team_id, league_id; legacy code uses rating and team_name-only upserts. Elo remains disabled pending a schema-aligned implementation.
+- match_analyses uses analyzed_at, not created_at. Legacy analysis remains disabled.
+- Login-only ownership policies are needed for profiles (id=auth.uid()) and bookmarks (device_id=auth.uid()::text), together with least-privilege grants. Guest device IDs must not be treated as authorization. UI guest saving/migration and false optimistic success need coordinated revision before these policies are enabled.
+- Provider service key setup and actual DB write tests remain outstanding.

@@ -48,7 +48,6 @@ export async function settlePending(db: any, getFixture: (id: string) => Promise
         const { data: saved, error: saveError } = await db.from('bookmarks').update({
           actual_result: result.score,
           is_correct: normalizePick(row.pick) === result.outcome,
-          updated_at: new Date().toISOString(),
         }).eq('id', row.id).eq('pick', row.pick).is('is_correct', null).select('id');
         if (saveError) failed++;
         else updated += saved?.length || 0;

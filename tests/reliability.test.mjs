@@ -113,7 +113,7 @@ function mockDb(rows, failWrite = false) {
       range(a, b) { start = a; end = b; return query; },
       is(key, value) { filters.push(r => r[key] === value); return query; },
       eq(key, value) { filters.push(r => r[key] === value); return query; },
-      update(value) { patch = value; return query; },
+      update(value) { assert.equal(Object.hasOwn(value, 'updated_at'), false, 'bookmarks has no updated_at column'); patch = value; return query; },
       then(resolve) {
         const found = rows.filter(r => filters.every(f => f(r))).slice(start, end + 1);
         if (patch && failWrite) return Promise.resolve({ data: null, error: new Error('write failed') }).then(resolve);
