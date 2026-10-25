@@ -39,7 +39,7 @@ const getLeagueNameKorean = (league: string): string => {
   return league;
 };
 
-const getInitialProbability = (matchId: string): number => {
+const getInitialProbability = (matchId: string, homeOdds: number): number => {
   switch (matchId) {
     case 'm1': return 0.72; // MAN CITY vs ARSENAL -> Value Bet (Theo 30.0%)
     case 'm2': return 0.45; // REAL MADRID vs BARCELONA
@@ -49,13 +49,17 @@ const getInitialProbability = (matchId: string): number => {
     case 'm6': return 0.62; // DOOSAN vs LG
     case 'm7': return 0.78; // DODGERS vs GIANTS -> Value Bet (Theo 42.6%)
     case 'm8': return 0.58; // LAKERS vs WARRIORS
-    default: return 0.50;
+    default: {
+      // 실시간 API 경기는 홈팀 배당 기반 내재확률에 엣지(+0.05) 부여 (100% 초과 방지 클램핑)
+      const impliedProb = homeOdds > 0 ? 1 / homeOdds : 0;
+      return impliedProb > 0 ? Math.min(impliedProb + 0.05, 0.99) : 0.50;
+    }
   }
 };
 
 const enrichMatches = (data: BaseMatchData[]): MatchData[] => {
   return data.map(m => {
-    const prob = getInitialProbability(m.id);
+    const prob = getInitialProbability(m.id, m.odds.win);
     const kelly = calcKelly(prob, m.odds.win);
     const sport = (m as any).sport || getMatchSport(m.id);
     return { ...m, kellyResult: kelly, sport };
@@ -64,6 +68,12 @@ const enrichMatches = (data: BaseMatchData[]): MatchData[] => {
     const bVal = b.kellyResult?.isValueBet ? 1 : 0;
     return bVal - aVal;
   });
+};
+
+const getNicknameFromEmail = (email?: string | null): string => {
+  if (!email) return '사용자';
+  const prefix = email.split('@')[0];
+  return prefix ? prefix.trim() : '사용자';
 };
 
 export const MatchTerminal: React.FC = () => {
@@ -76,11 +86,12 @@ export const MatchTerminal: React.FC = () => {
   const [isBetPlaced, setIsBetPlaced] = useState(false);
 
   const formattedToday = useMemo(() => {
-    const d = new Date();
-    const month = d.getMonth() + 1;
-    const date = d.getDate();
+    const kstTime = new Date().getTime() + (9 * 60 * 60 * 1000);
+    const d = new Date(kstTime);
+    const month = d.getUTCMonth() + 1;
+    const date = d.getUTCDate();
     const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-    const day = dayNames[d.getDay()];
+    const day = dayNames[d.getUTCDay()];
     return `${month}월 ${date}일 (${day})`;
   }, []);
   
@@ -129,9 +140,10 @@ export const MatchTerminal: React.FC = () => {
   // Auth & Profile States
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
-  const [authMode, setAuthMode] = useState<'login' | 'signup' | 'none'>('none');
+  const [authMode, setAuthMode] = useState<'login' | 'signup' | 'none'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [authError, setAuthError] = useState('');
 
   // Supabase Bookmark States
@@ -160,11 +172,20 @@ export const MatchTerminal: React.FC = () => {
 
     const fetchProfile = async (user: any) => {
       const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+      const defaultNickname = getNicknameFromEmail(user.email);
+
       if (data) {
-        setProfile(data);
-        setCapital(Number(data.capital));
+        if (!data.nickname || data.nickname.startsWith('User_')) {
+          const updatedProfile = { ...data, nickname: defaultNickname };
+          setProfile(updatedProfile);
+          setCapital(Number(data.capital));
+          await supabase.from('profiles').update({ nickname: defaultNickname }).eq('id', user.id);
+        } else {
+          setProfile(data);
+          setCapital(Number(data.capital));
+        }
       } else {
-        const newProfile = { id: user.id, email: user.email, nickname: 'User_' + Math.random().toString(36).substring(2,6), capital: 1000000, grade: 'free' };
+        const newProfile = { id: user.id, email: user.email, nickname: defaultNickname, capital: 1000000, grade: 'free' };
         await supabase.from('profiles').insert(newProfile);
         setProfile(newProfile);
         setCapital(1000000);
@@ -210,18 +231,37 @@ export const MatchTerminal: React.FC = () => {
 
   const handleEmailAuth = async () => {
     setAuthError('');
+    if (!email.trim() || !password.trim()) {
+      setAuthError('이메일과 비밀번호를 입력해주세요.');
+      return;
+    }
+
     if (authMode === 'signup') {
+      if (!confirmPassword.trim()) {
+        setAuthError('비밀번호 확인을 입력해주세요.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setAuthError('비밀번호가 일치하지 않습니다.');
+        return;
+      }
       const { error } = await supabase.auth.signUp({ email, password });
       if (error) setAuthError(error.message);
       else {
         alert('회원가입이 완료되었습니다. 로그인해주세요.');
         setAuthMode('login');
+        setConfirmPassword('');
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) setAuthError(error.message);
       else setAuthMode('none');
     }
+  };
+
+  const toggleAuthMode = () => {
+    setAuthError('');
+    setAuthMode(prev => prev === 'signup' ? 'login' : 'signup');
   };
 
   const handleGoogleLogin = async () => {
@@ -265,6 +305,13 @@ export const MatchTerminal: React.FC = () => {
       // Add
       setBookmarkedIds(prev => new Set(prev).add(match.id));
       
+      const matchPick = 
+        selectedMatch?.id === match.id && betPick
+          ? betPick
+          : match.kellyResult?.recommendation === 'BET'
+            ? (match.kellyResult.edge > 0 ? 'home' : 'away')
+            : null;
+
       const newBookmark = {
         device_id: deviceId,
         match_id: match.id,
@@ -274,7 +321,9 @@ export const MatchTerminal: React.FC = () => {
         predicted_score: match.previewScore || '',
         kelly_percent: match.kellyResult?.fractionalKelly || 0,
         is_value_bet: !!match.kellyResult?.isValueBet,
-        bet_date: new Date().toISOString().split('T')[0]
+        pick: matchPick,
+        kickoff_time: match.startTime,
+        bet_date: match.startTime
       };
       
       const { data } = await supabase
@@ -303,7 +352,11 @@ export const MatchTerminal: React.FC = () => {
   const notifications = useMemo(() => {
     const valueBets = matches.filter(m => m.kellyResult?.isValueBet);
     const now = new Date();
-    const timeString = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+    const timeString = now.toLocaleTimeString('ko-KR', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      timeZone: 'Asia/Seoul'
+    });
 
     return valueBets.map((match, index) => {
       const leagueStr = getLeagueNameKorean(match.league);
@@ -321,7 +374,7 @@ export const MatchTerminal: React.FC = () => {
     setMounted(true);
     const loadMatches = async () => {
       try {
-        const res = await fetch('/api/matches');
+        const res = await fetch('/api/matches?t=' + Date.now());
         const json = await res.json();
         if (json.success) {
           const dataList = json.data || [];
@@ -436,6 +489,56 @@ export const MatchTerminal: React.FC = () => {
     return result;
   }, [matches, selectedSport, showOnlyValueBets, searchQuery]);
 
+  const groupedMatches = useMemo(() => {
+    const sorted = [...filteredMatches].sort((a, b) => {
+      return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
+    });
+
+    const groups: { dateLabel: string; matches: MatchData[] }[] = [];
+    
+    const nowKstTime = new Date().getTime() + (9 * 60 * 60 * 1000);
+    const nowKst = new Date(nowKstTime);
+    const tomorrowKst = new Date(nowKstTime + (24 * 60 * 60 * 1000));
+
+    const getDateLabel = (dateStr: string) => {
+      const d = new Date(dateStr);
+      const kstTime = d.getTime() + (9 * 60 * 60 * 1000);
+      const kstD = new Date(kstTime);
+      const month = kstD.getUTCMonth() + 1;
+      const date = kstD.getUTCDate();
+      const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+      const day = dayNames[kstD.getUTCDay()];
+      
+      const label = `${month}월 ${date}일 (${day})`;
+      
+      const isToday = nowKst.getUTCFullYear() === kstD.getUTCFullYear() && 
+                      nowKst.getUTCMonth() === kstD.getUTCMonth() && 
+                      nowKst.getUTCDate() === kstD.getUTCDate();
+                      
+      if (isToday) return `${label} (오늘)`;
+      
+      const isTomorrow = tomorrowKst.getUTCFullYear() === kstD.getUTCFullYear() && 
+                         tomorrowKst.getUTCMonth() === kstD.getUTCMonth() && 
+                         tomorrowKst.getUTCDate() === kstD.getUTCDate();
+                         
+      if (isTomorrow) return `${label} (내일)`;
+      
+      return label;
+    };
+
+    sorted.forEach(match => {
+      const label = getDateLabel(match.startTime);
+      let group = groups.find(g => g.dateLabel === label);
+      if (!group) {
+        group = { dateLabel: label, matches: [] };
+        groups.push(group);
+      }
+      group.matches.push(match);
+    });
+
+    return groups;
+  }, [filteredMatches]);
+
   if (!mounted) return null;
 
   return (
@@ -543,7 +646,7 @@ export const MatchTerminal: React.FC = () => {
           <div className="home-view-wrapper">
             <div className="today-section-header">
               <span className="section-title">
-                {showOnlyValueBets ? 'AI 추천 분석 매치' : searchQuery ? `'${searchQuery}' 검색 결과` : `${formattedToday} 경기`}
+                {showOnlyValueBets ? 'AI 추천 분석 매치' : searchQuery ? `'${searchQuery}' 검색 결과` : `7일간 일정`}
               </span>
               {(showOnlyValueBets || searchQuery) && (
                 <span className="section-link reset" onClick={resetToHome}>필터 해제</span>
@@ -551,69 +654,88 @@ export const MatchTerminal: React.FC = () => {
             </div>
 
             <div className="match-cards-list">
-              {filteredMatches.length > 0 ? (
-                filteredMatches.map(match => {
-                  const isValue = match.kellyResult?.isValueBet;
-                  const sportEmoji = match.sport === 'baseball' ? '⚾' : match.sport === 'basketball' ? '🏀' : '⚽';
-                  const formattedTime = new Date(match.startTime).toLocaleTimeString('ko-KR', {
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    hour12: true
-                  });
-                  return (
-                    <div 
-                      key={match.id}
-                      className={`m-match-card ${selectedMatch.id === match.id ? 'selected' : ''} ${isValue ? 'bet-match' : 'skip-match'}`}
-                      onClick={() => {
-                        setSelectedMatch(match);
-                        setResults([]);
-                        setIsBetPlaced(false);
-                        setBetPick(null);
-                        setActiveTab('analysis');
-                      }}
-                    >
-                      <div className="card-header-row">
-                        <span className="league-name">{sportEmoji} {getLeagueNameKorean(match.league)}</span>
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                          <button 
-                            className="bookmark-btn" 
-                            onClick={(e) => toggleBookmark(match, e)}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                          >
-                            <Heart size={18} color={bookmarkedIds.has(match.id) ? '#ff3d00' : '#666'} fill={bookmarkedIds.has(match.id) ? '#ff3d00' : 'none'} />
-                          </button>
-                          <div className={`decision-pill-badge ${isValue ? 'bet' : 'skip'}`}>
-                            {isValue ? 'BET ✓' : 'SKIP'}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="card-teams-row">
-                        <span className="team-name">{match.teams.home}</span>
-                        <span className="vs-divider">VS</span>
-                        <span className="team-name">{match.teams.away}</span>
-                      </div>
-
-                      <div className="card-footer-row">
-                        <span className="match-time-label">{formattedTime}</span>
-                        <div className="match-odds-group">
-                          <span className={`odds-box ${isValue ? 'highlight' : ''}`}>승 {match.odds.win}</span>
-                          <span className="odds-box">무 {match.odds.draw}</span>
-                          <span className="odds-box">패 {match.odds.loss}</span>
-                        </div>
-                        {match.kellyResult && (
-                          <div className="kelly-percent-badge">
-                            {(match.kellyResult.fractionalKelly * 100).toFixed(1)}%
-                          </div>
-                        )}
-                      </div>
+              {groupedMatches.length > 0 ? (
+                groupedMatches.map(group => (
+                  <div key={group.dateLabel} style={{ marginBottom: '24px' }}>
+                    <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#00e5ff', padding: '10px 15px', borderBottom: '1px solid rgba(0, 229, 255, 0.2)', marginBottom: '12px' }}>
+                      {group.dateLabel}
                     </div>
-                  );
-                })
+                    {group.matches.map(match => {
+                      const isValue = match.kellyResult?.isValueBet;
+                      const sportEmoji = match.sport === 'baseball' ? '⚾' : match.sport === 'basketball' ? '🏀' : '⚽';
+                      const formattedTime = new Date(match.startTime).toLocaleTimeString('ko-KR', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true,
+                        timeZone: 'Asia/Seoul'
+                      });
+                      return (
+                        <div 
+                          key={match.id}
+                          className={`m-match-card ${selectedMatch.id === match.id ? 'selected' : ''} ${isValue ? 'bet-match' : 'skip-match'}`}
+                          onClick={() => {
+                            setSelectedMatch(match);
+                            setResults([]);
+                            setIsBetPlaced(false);
+                            setBetPick(null);
+                            setActiveTab('analysis');
+                          }}
+                        >
+                          <div className="card-header-row">
+                            <span className="league-name">{sportEmoji} {getLeagueNameKorean(match.league)}</span>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                              <button 
+                                className="bookmark-btn" 
+                                onClick={(e) => toggleBookmark(match, e)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                              >
+                                <Heart size={18} color={bookmarkedIds.has(match.id) ? '#ff3d00' : '#666'} fill={bookmarkedIds.has(match.id) ? '#ff3d00' : 'none'} />
+                              </button>
+                              <div className={`decision-pill-badge ${isValue ? 'bet' : 'skip'}`}>
+                                {isValue ? 'BET ✓' : 'SKIP'}
+                                {match.kellyResult?.confidenceScore ? (
+                                  <span style={{ marginLeft: '4px', fontSize: '11px', opacity: 0.9 }}>
+                                    ({(match.kellyResult.confidenceScore * 100).toFixed(0)}%)
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="card-teams-row">
+                            <span className="team-name">{match.teams.home}</span>
+                            <span className="vs-divider">VS</span>
+                            <span className="team-name">{match.teams.away}</span>
+                          </div>
+
+                          <div className="card-footer-row">
+                            <span className="match-time-label">{formattedTime}</span>
+                            <div className="match-odds-group">
+                              {match.odds.win > 0 ? (
+                                <>
+                                  <span className={`odds-box ${isValue ? 'highlight' : ''}`}>승 {match.odds.win}</span>
+                                  <span className="odds-box">무 {match.odds.draw}</span>
+                                  <span className="odds-box">패 {match.odds.loss}</span>
+                                </>
+                              ) : (
+                                <span className="odds-box" style={{ flex: 1, textAlign: 'center', background: 'rgba(255,255,255,0.03)', color: '#888' }}>배당 정보 없음</span>
+                              )}
+                            </div>
+                            {match.kellyResult && match.odds.win > 0 && (
+                              <div className="kelly-percent-badge">
+                                {(match.kellyResult.fractionalKelly * 100).toFixed(1)}%
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))
               ) : (
                 <div className="no-matches-screen">
                   <Flame size={40} className="no-match-glow-icon" />
-                  <p className="no-match-primary">오늘 해당 종목 경기가 없습니다</p>
+                  <p className="no-match-primary">해당 기간 경기가 없습니다</p>
                   <span className="no-match-sub">AI 핵심 인텔리전스 시스템이 다음 전술 매치업을 수집 중입니다.</span>
                 </div>
               )}
@@ -640,8 +762,11 @@ export const MatchTerminal: React.FC = () => {
 
                 {activeKelly && (
                   <div className={`recommendation-banner ${activeKelly.isValueBet ? 'bet' : 'skip'}`}>
-                    <div className="banner-title">
-                      {activeKelly.isValueBet ? '베팅 추천' : '패스 추천'}
+                    <div className="banner-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>{activeKelly.isValueBet ? 'BET ✓ (베팅 추천)' : 'SKIP (패스 추천)'}</span>
+                      <span style={{ fontSize: '0.9rem', color: '#00e5ff', fontWeight: 'bold' }}>
+                        신뢰도 점수: {((activeKelly.confidenceScore ?? 0.80) * 100).toFixed(1)}%
+                      </span>
                     </div>
                     <div className="banner-desc">
                       {consensus ? (
@@ -922,7 +1047,11 @@ export const MatchTerminal: React.FC = () => {
                 {session && (
                   <div className="auth-user-box">
                     <div className="user-info">
-                      <span className="user-nickname">{profile?.nickname || '사용자'}</span>
+                      <span className="user-nickname">
+                        {profile?.nickname && !profile.nickname.startsWith('User_')
+                          ? profile.nickname
+                          : getNicknameFromEmail(session?.user?.email || profile?.email)}
+                      </span>
                       <span className="user-email">{session.user.email}</span>
                       <span className={`user-grade ${profile?.grade === 'premium' ? 'premium' : ''}`}>
                         {profile?.grade === 'premium' ? '👑 Premium' : '⭐ 일반 회원'}
@@ -961,13 +1090,24 @@ export const MatchTerminal: React.FC = () => {
                       placeholder="이메일 주소" 
                       value={email} 
                       onChange={e => setEmail(e.target.value)} 
+                      onKeyDown={e => { if (e.key === 'Enter') handleEmailAuth(); }}
                     />
                     <input 
                       type="password" 
                       placeholder="비밀번호" 
                       value={password} 
                       onChange={e => setPassword(e.target.value)} 
+                      onKeyDown={e => { if (e.key === 'Enter') handleEmailAuth(); }}
                     />
+                    {authMode === 'signup' && (
+                      <input 
+                        type="password" 
+                        placeholder="비밀번호 확인" 
+                        value={confirmPassword} 
+                        onChange={e => setConfirmPassword(e.target.value)} 
+                        onKeyDown={e => { if (e.key === 'Enter') handleEmailAuth(); }}
+                      />
+                    )}
                     {authError && <p className="auth-error">{authError}</p>}
                     
                     <button className="auth-full-btn primary" onClick={handleEmailAuth}>
@@ -988,11 +1128,16 @@ export const MatchTerminal: React.FC = () => {
                       Google로 계속하기
                     </button>
 
-                    <div className="auth-footer-text">
+                    <div
+                      className="auth-footer-text"
+                      onClick={toggleAuthMode}
+                      onTouchEnd={(e) => { e.preventDefault(); toggleAuthMode(); }}
+                      style={{ cursor: 'pointer' }}
+                    >
                       {authMode === 'signup' ? (
-                        <>이미 계정이 있으신가요? <span onClick={() => setAuthMode('login')}>로그인</span></>
+                        <>이미 계정이 있으신가요? <span style={{ textDecoration: 'underline' }}>로그인</span></>
                       ) : (
-                        <>계정이 없으신가요? <span onClick={() => setAuthMode('signup')}>회원가입</span></>
+                        <>계정이 없으신가요? <span style={{ textDecoration: 'underline' }}>회원가입</span></>
                       )}
                     </div>
                   </div>
@@ -1031,7 +1176,7 @@ export const MatchTerminal: React.FC = () => {
                 )}
               </div>
 
-              <div className="history-stats">
+              <div className="history-stats" style={{ display: session ? 'grid' : 'none' }}>
                 <div className="stat-box">
                   <span className="stat-label">총 찜</span>
                   <span className="stat-value">{bookmarkedMatches.length}</span>
@@ -2217,6 +2362,8 @@ export const MatchTerminal: React.FC = () => {
           font-size: 14px;
           color: #aaa;
           margin-top: 8px;
+          padding: 12px 8px;
+          touch-action: manipulation;
         }
         .auth-footer-text span {
           color: #00e676;

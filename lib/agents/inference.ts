@@ -74,59 +74,117 @@ export class AlphaInference {
   }
 
   private buildPrompt(persona: AgentPersona, match: MatchData, weather: WeatherData | null, context?: string): string {
-    let statsBlock = '';
-    if (match.stats) {
-      const h = match.stats.home;
-      const a = match.stats.away;
-      statsBlock = `
-      [팀 통계]
-      - 홈(${match.teams.home}): 최근5경기 ${h.form}, xG ${h.xG}, 득점 ${h.goalsScored}, 실점 ${h.goalsConceded}, 승률 ${h.winRate}%
-      - 원정(${match.teams.away}): 최근5경기 ${a.form}, xG ${a.xG}, 득점 ${a.goalsScored}, 실점 ${a.goalsConceded}, 승률 ${a.winRate}%
-      - 최근 맞대결: ${match.stats.headToHead}`;
-    }
+    const hStats = match.stats?.home;
+    const aStats = match.stats?.away;
+
+    const homeElo = match.elo?.home || 1500;
+    const awayElo = match.elo?.away || 1500;
+
+    const homeWinRate = hStats?.homeWinRate ?? hStats?.winRate ?? 50;
+    const homeForm = hStats?.form || 'WWDWL';
+    const homeGoalsFor = hStats?.goalsScored ?? 10;
+    const homeGoalsAgainst = hStats?.goalsConceded ?? 5;
+    const homeInjuries = match.injuries?.home?.join(', ') || 'None';
+
+    const awayWinRate = aStats?.awayWinRate ?? aStats?.winRate ?? 40;
+    const awayForm = aStats?.form || 'WDLDW';
+    const awayGoalsFor = aStats?.goalsScored ?? 8;
+    const awayGoalsAgainst = aStats?.goalsConceded ?? 8;
+    const awayInjuries = match.injuries?.away?.join(', ') || 'None';
+
+    const h2hRecord = match.h2hRecord || match.stats?.headToHead || 'N/A';
 
     let weatherBlock = '';
     if (weather && match.city) {
       weatherBlock = `
-      [날씨 정보]
-      - 경기 장소: ${match.city}
-      - 기온: ${weather.temp}°C
-      - 강수 확률: ${weather.rain}%
-      - 풍속: ${weather.wind}km/h`;
+[Weather Metrics]
+- Location: ${match.city}
+- Temperature: ${weather.temp}°C
+- Precipitation Probability: ${weather.rain}%
+- Wind Speed: ${weather.wind} km/h`;
     }
 
     return `
-      ${persona.prompt}
-      
-      현재 분석 중인 경기 데이터:
-      - 매치: ${match.teams.home} vs ${match.teams.away}
-      - 리그: ${match.league}
-      - 배당: 승(${match.odds.win}) / 무(${match.odds.draw}) / 패(${match.odds.loss})
-      ${statsBlock}
-      ${weatherBlock}
-      - 추가 컨텍스트: ${context || 'N/A'}
+${persona.prompt}
 
-      [출력 규칙 - 반드시 준수할 것]
-      1. 응답은 반드시 다음 형식을 포함해야 합니다:
-          CONFIDENCE: [0.0에서 1.0 사이의 숫자]
-          SENTIMENT: [favorable | unfavorable | stable 중 하나]
-          SCORE: [예상 점수, 예: 2:1]
-          FINDINGS: [중요 분석 포인트를 리스트 형태로 3개 작성]
+[MATCH ANALYSIS CONTEXT]
+- Fixture: ${match.teams.home} (Home) vs ${match.teams.away} (Away)
+- Competition: ${match.league}
+- Bookmaker Odds: Home Win (${match.odds.win}) | Draw (${match.odds.draw}) | Away Win (${match.odds.loss})
 
-      2. 말투는 냉철하고 전문적인 분석관처럼 하십시오.
-    `;
+[TEAM STATISTICS]
+Home Team (${match.teams.home}):
+- Home Win Rate: ${homeWinRate}%
+- Last 5 Games Form: ${homeForm}
+- Avg Goals Scored: ${homeGoalsFor}
+- Avg Goals Conceded: ${homeGoalsAgainst}
+- Key Injuries/Suspensions: ${homeInjuries}
+- ELO Rating: ${homeElo}
+
+Away Team (${match.teams.away}):
+- Away Win Rate: ${awayWinRate}%
+- Last 5 Games Form: ${awayForm}
+- Avg Goals Scored: ${awayGoalsFor}
+- Avg Goals Conceded: ${awayGoalsAgainst}
+- Key Injuries/Suspensions: ${awayInjuries}
+- ELO Rating: ${awayElo}
+
+[HEAD-TO-HEAD (LAST 10 MATCHES)]
+${h2hRecord}
+${weatherBlock}
+
+[AGENT DEBATE CONTEXT]
+${context || 'No preceding agent rebuttals.'}
+
+[STRICT OUTPUT PROTOCOL]
+You MUST reply conforming to the following structure:
+CONFIDENCE: [A number between 0.00 and 1.00]
+SENTIMENT: [favorable | unfavorable | stable]
+WIN_PROB: [Home Win Probability between 0.00 and 1.00]
+DRAW_PROB: [Draw Probability between 0.00 and 1.00]
+LOSS_PROB: [Away Win Probability between 0.00 and 1.00]
+(Sum of WIN_PROB + DRAW_PROB + LOSS_PROB MUST equal 1.00)
+SCORE: [Predicted scoreline, e.g. 2:1]
+FINDINGS:
+- [Key analytical finding 1]
+- [Key analytical finding 2]
+- [Key analytical finding 3]
+`;
   }
 
   private parseAIResponse(persona: AgentPersona, text: string): AgentResult {
     // Advanced parsing logic with regex
     const confidenceMatch = text.match(/CONFIDENCE:\s*([\d\.]+)/i);
     const sentimentMatch = text.match(/SENTIMENT:\s*(favorable|unfavorable|stable)/i);
+    const winMatch = text.match(/WIN_PROB:\s*([\d\.]+)/i);
+    const drawMatch = text.match(/DRAW_PROB:\s*([\d\.]+)/i);
+    const lossMatch = text.match(/LOSS_PROB:\s*([\d\.]+)/i);
     const scoreMatch = text.match(/SCORE:\s*(\d+:\d+)/i);
     const findingsSection = text.match(/FINDINGS:([\s\S]+)/i);
 
-    const confidence = confidenceMatch ? parseFloat(confidenceMatch[1]) : 0.7;
+    const parsedConfidence = confidenceMatch ? parseFloat(confidenceMatch[1]) : 0.7;
+    const confidence = Math.min(Math.max(isNaN(parsedConfidence) ? 0.7 : parsedConfidence, 0), 1);
     const sentiment = (sentimentMatch ? sentimentMatch[1].toLowerCase() : 'stable') as any;
     const predictedScore = scoreMatch ? scoreMatch[1] : undefined;
+
+    const rawWin = winMatch ? parseFloat(winMatch[1]) : NaN;
+    const rawDraw = drawMatch ? parseFloat(drawMatch[1]) : NaN;
+    const rawLoss = lossMatch ? parseFloat(lossMatch[1]) : NaN;
+
+    let winProb = isNaN(rawWin) ? 0.45 : rawWin;
+    let drawProb = isNaN(rawDraw) ? 0.25 : rawDraw;
+    let lossProb = isNaN(rawLoss) ? 0.30 : rawLoss;
+
+    const totalProb = winProb + drawProb + lossProb;
+    if (totalProb > 0) {
+      winProb = winProb / totalProb;
+      drawProb = drawProb / totalProb;
+      lossProb = lossProb / totalProb;
+    }
+
+    winProb = Math.min(Math.max(winProb, 0.01), 0.99);
+    drawProb = Math.min(Math.max(drawProb, 0.01), 0.99);
+    lossProb = Math.min(Math.max(lossProb, 0.01), 0.99);
     
     let findings = [
       `${persona.name}의 데이터 스캔 결과 정밀한 상시 분석 진행 중.`,
@@ -151,7 +209,10 @@ export class AlphaInference {
       confidence,
       sentiment,
       findings,
-      predictedScore
+      predictedScore,
+      winProb,
+      drawProb,
+      lossProb
     };
   }
 }
