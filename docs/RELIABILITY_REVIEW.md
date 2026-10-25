@@ -29,10 +29,18 @@
 
 ## 이후 단계
 - 운영 소스 동기화 및 단일 배포 경로 확정.
-- 의존성 보안 업데이트: 설치 시 Next 15.1.9 보안 경고가 발생했다. 프레임워크 업데이트와 회귀 검증 전 production 반영을 보류한다.
+- 의존성 보안 업데이트: Next.js/eslint-config-next 15.5.28, React/react-dom 19.2.9로 고정하고 lockfile을 갱신했다. Next.js 공식 2026-10-14 보안 공지의 15.x 패치 버전을 적용했다: https://nextjs.org/blog/nextjs-security-update-october-14-2026. 운영 소스에 같은 변경을 이식한 뒤 재검증해야 한다.
 - Supabase 테이블/RLS 마이그레이션을 코드로 관리하고 계정 간 격리를 검증한다.
 - 예측: fixture_id, prediction_at, input_snapshot, model_version, P(home/draw/away), market, price/source/time을 서버에 저장하고 경기 시작 전 잠근다.
 - 경기 결과: 정규시간/연장/승부차기 기준을 시장별로 명시하고 취소·연기·무효를 분리한다.
 - 결과 수집 작업은 중복 실행해도 같은 결과가 되게 만들고, 공식 정정은 감사 이력을 남긴다.
 - 전체 예측 표본을 기준으로 적중률/Brier score/모의 수익률 및 시장 배당 기준선을 비교한다. 수동 찜 기록과 합치지 않는다.
 - 통계 모델 검증이 완료되기 전에는 LLM 설명을 승률로 바꾸거나 추천을 다시 켜지 않는다.
+
+## 보안 의존성 후속 수정 (2026-10-25)
+- Next.js/eslint-config-next 15.5.28, React/react-dom 19.2.9 고정.
+- Next.js 하위 PostCSS를 8.5.31로 고정하여 소스맵 관련 감사 경고를 해소.
+- 호환 범위 내 lockfile 보안 업데이트로 nanoid/source-map-js/undici 수정.
+- 앱 코드에서 참조하지 않는 Prisma CLI/client 제거. 기존 SQLite schema 파일은 설계 참고로 보존하며, 운영 데이터 접근은 기존 Supabase를 그대로 사용한다. 향후 Prisma 도입 시 CLI/client 동일 버전과 별도 마이그레이션 검증이 필요하다.
+- Vercel 도구 연결 후 조회를 시도했으나 kimtyy-3779s-projects 팀 승인 누락으로 403 응답을 받았다. 팀 승인 후 같은 연결로 재조회해야 한다. 운영 소스 동기화/키 교체/배포는 미완료다.
+- npm audit --omit=dev 검사: 보고된 취약점 0건. 이는 현재 감사 데이터베이스 기준이며 실제 운영 배포에 반영되었다는 의미가 아니다.
