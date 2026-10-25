@@ -10,8 +10,8 @@ export async function GET() {
   } catch (error: any) {
     console.error('Matches API Route Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch matches' },
-      { status: 500 }
+      { success: false, code: 'DATA_UNAVAILABLE', error: '경기 데이터를 가져올 수 없습니다.' },
+      { status: 503 }
     );
   }
 }
