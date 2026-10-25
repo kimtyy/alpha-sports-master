@@ -33,3 +33,9 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+
+
+# All environment exports, including accidentally space-prefixed files
+.env*
+*.env*
+!.env.example
