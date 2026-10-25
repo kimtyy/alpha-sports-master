@@ -8,6 +8,10 @@ export interface KellyResult {
 }
 
 export function calcKelly(modelProb: number, bookmakerOdds: number): KellyResult {
+  if (!Number.isFinite(modelProb) || modelProb < 0 || modelProb > 1 ||
+      !Number.isFinite(bookmakerOdds) || bookmakerOdds <= 1) {
+    throw new RangeError('Probability must be in [0, 1] and decimal odds must exceed 1.');
+  }
   const impliedProb = bookmakerOdds > 0 ? 1 / bookmakerOdds : 0;
   const edge = modelProb - impliedProb;
 

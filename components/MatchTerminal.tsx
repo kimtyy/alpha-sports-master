@@ -12,9 +12,8 @@ import {
   CalendarDays, Flame, Bell, User, ExternalLink, MessageSquare, Send, Bot, Heart
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { AgentResult, MatchData as BaseMatchData } from '@/lib/agents/orchestrator';
-import { MOCK_MATCHES } from '@/lib/data/matches';
-import { calcKelly, KellyResult } from '@/lib/kelly';
+import type { MatchData as BaseMatchData } from '@/lib/agents/orchestrator';
+import type { KellyResult } from '@/lib/kelly';
 
 export interface MatchData extends BaseMatchData {
   kellyResult?: KellyResult;
@@ -39,49 +38,26 @@ const getLeagueNameKorean = (league: string): string => {
   return league;
 };
 
-const getInitialProbability = (matchId: string): number => {
-  switch (matchId) {
-    case 'm1': return 0.72; // MAN CITY vs ARSENAL -> Value Bet (Theo 30.0%)
-    case 'm2': return 0.45; // REAL MADRID vs BARCELONA
-    case 'm3': return 0.35; // FC SEOUL vs ULSAN HD
-    case 'm4': return 0.85; // BAYERN MUNICH vs LEVERKUSEN -> Value Bet (Theo 76.5%)
-    case 'm5': return 0.28; // JEJU UTD vs DAEGU FC
-    case 'm6': return 0.62; // DOOSAN vs LG
-    case 'm7': return 0.78; // DODGERS vs GIANTS -> Value Bet (Theo 42.6%)
-    case 'm8': return 0.58; // LAKERS vs WARRIORS
-    default: return 0.50;
-  }
+// No probability or Kelly enrichment before a validated model exists.
+const enrichMatches = (data: BaseMatchData[]): MatchData[] =>
+  data.map(m => ({ ...m, sport: 'soccer', kellyResult: undefined }));
+const EMPTY_MATCH: MatchData = {
+  id: '', code: '', teams: { home: '', away: '' }, league: '',
+  odds: { win: 0, draw: 0, loss: 0 }, startTime: '', sport: 'soccer',
 };
-
-const enrichMatches = (data: BaseMatchData[]): MatchData[] => {
-  return data.map(m => {
-    const prob = getInitialProbability(m.id);
-    const kelly = calcKelly(prob, m.odds.win);
-    const sport = (m as any).sport || getMatchSport(m.id);
-    return { ...m, kellyResult: kelly, sport };
-  }).sort((a, b) => {
-    const aVal = a.kellyResult?.isValueBet ? 1 : 0;
-    const bVal = b.kellyResult?.isValueBet ? 1 : 0;
-    return bVal - aVal;
-  });
-};
+const formatOdds = (value: number) => Number.isFinite(value) && value > 1 ? value.toFixed(2) : '미수집';
 
 export const MatchTerminal: React.FC = () => {
   const [mounted, setMounted] = useState(false);
-  const [isInferring, setIsInferring] = useState(false);
-  const [results, setResults] = useState<AgentResult[]>([]);
-  const [matches, setMatches] = useState<MatchData[]>(enrichMatches(MOCK_MATCHES));
-  const [selectedMatch, setSelectedMatch] = useState<MatchData>(enrichMatches(MOCK_MATCHES)[0]);
-  const [betPick, setBetPick] = useState<'WIN' | 'DRAW' | 'LOSS' | null>(null);
-  const [isBetPlaced, setIsBetPlaced] = useState(false);
+  const [loadingMatches, setLoadingMatches] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [matches, setMatches] = useState<MatchData[]>([]);
+  const [selectedMatch, setSelectedMatch] = useState<MatchData>(EMPTY_MATCH);
 
   const formattedToday = useMemo(() => {
-    const d = new Date();
-    const month = d.getMonth() + 1;
-    const date = d.getDate();
-    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-    const day = dayNames[d.getDay()];
-    return `${month}월 ${date}일 (${day})`;
+    return new Intl.DateTimeFormat('ko-KR', {
+      month: 'long', day: 'numeric', weekday: 'short', timeZone: 'Asia/Seoul',
+    }).format(new Date());
   }, []);
   
   // Navigation & Filtering States
@@ -93,38 +69,6 @@ export const MatchTerminal: React.FC = () => {
   
   // Capital & Accordion States
   const [capital, setCapital] = useState<number>(1000000); 
-  const [isDetailsOpen, setIsDetailsOpen] = useState<boolean>(false);
-
-  // Chat States
-  const [chatHistory, setChatHistory] = useState<{role: string, content: string}[]>([]);
-  const [chatInput, setChatInput] = useState('');
-  const [isChatLoading, setIsChatLoading] = useState(false);
-
-  const handleSendChat = async (text: string) => {
-    if (!text.trim()) return;
-    const newHistory = [...chatHistory, { role: 'user', content: text }];
-    setChatHistory(newHistory);
-    setChatInput('');
-    setIsChatLoading(true);
-
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, history: chatHistory })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setChatHistory([...newHistory, { role: 'assistant', content: data.text }]);
-      } else {
-        setChatHistory([...newHistory, { role: 'assistant', content: '오류가 발생했습니다: ' + (data.error || '알 수 없는 오류') }]);
-      }
-    } catch (err) {
-      setChatHistory([...newHistory, { role: 'assistant', content: '네트워크 오류가 발생했습니다.' }]);
-    } finally {
-      setIsChatLoading(false);
-    }
-  };
 
   // Auth & Profile States
   const [session, setSession] = useState<any>(null);
@@ -271,9 +215,9 @@ export const MatchTerminal: React.FC = () => {
         home_team: match.teams.home,
         away_team: match.teams.away,
         league: match.league,
-        predicted_score: match.previewScore || '',
-        kelly_percent: match.kellyResult?.fractionalKelly || 0,
-        is_value_bet: !!match.kellyResult?.isValueBet,
+        predicted_score: '',
+        kelly_percent: 0,
+        is_value_bet: false,
         bet_date: new Date().toISOString().split('T')[0]
       };
       
@@ -299,23 +243,7 @@ export const MatchTerminal: React.FC = () => {
   };
 
 
-  // Dynamic Notifications Data
-  const notifications = useMemo(() => {
-    const valueBets = matches.filter(m => m.kellyResult?.isValueBet);
-    const now = new Date();
-    const timeString = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-
-    return valueBets.map((match, index) => {
-      const leagueStr = getLeagueNameKorean(match.league);
-      return {
-        id: index + 1,
-        title: "AI 분석 완료 및 추천 매치 감지",
-        desc: `${leagueStr} ${match.teams.home} vs ${match.teams.away} 경기에 대해 기대값 우위가 검증되었습니다. Quarter Kelly에 기반한 포트폴리오 비중 편입을 추천합니다.`,
-        time: timeString,
-        tag: "베팅 추천"
-      };
-    });
-  }, [matches]);
+  const notifications: { id: number; title: string; desc: string; time: string; tag: string }[] = [];
 
   useEffect(() => {
     setMounted(true);
@@ -323,79 +251,23 @@ export const MatchTerminal: React.FC = () => {
       try {
         const res = await fetch('/api/matches');
         const json = await res.json();
+        if (!res.ok || !json.success || !Array.isArray(json.data)) throw new Error(json.error || '경기 데이터를 가져오지 못했습니다.');
         if (json.success) {
           const dataList = json.data || [];
           const enriched = enrichMatches(dataList);
           setMatches(enriched);
-          if (enriched.length > 0) {
-            setSelectedMatch(enriched[0]);
-          }
+          setSelectedMatch(enriched[0] || EMPTY_MATCH);
         }
       } catch (error) {
-        console.error('라이브 경기 데이터를 불러오는데 실패하여 폴백 데이터를 유지합니다:', error);
+        setMatches([]);
+        setSelectedMatch(EMPTY_MATCH);
+        setLoadError(error instanceof Error ? error.message : '경기 데이터를 가져오지 못했습니다.');
+      } finally {
+        setLoadingMatches(false);
       }
     };
     loadMatches();
   }, []);
-
-  const consensus = useMemo(() => {
-    if (results.length === 0) return null;
-    const finalBoss = results.find(r => r.agentId === 'alpha_consensus');
-    return finalBoss || (results.length > 0 ? results[0] : null);
-  }, [results]);
-
-  const activeKelly = useMemo(() => {
-    if (consensus && consensus.kellyResult) {
-      return consensus.kellyResult;
-    }
-    return selectedMatch.kellyResult;
-  }, [consensus, selectedMatch]);
-
-  const handleExecute = async () => {
-    setIsInferring(true);
-    setResults([]);
-    try {
-      const res = await fetch('/api/infer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ match: selectedMatch })
-      });
-      const json = await res.json();
-      if (json.success) {
-        setResults(json.data);
-      } else {
-        throw new Error(json.error);
-      }
-    } catch (error) {
-       await new Promise(r => setTimeout(r, 1500));
-       const demoOdds = selectedMatch.odds.win;
-       const demoKelly = calcKelly(0.89, demoOdds);
-       const demoResults: AgentResult[] = [
-         {
-           agentId: 'alpha_consensus',
-           name: '알파 컨센서스',
-           role: '최종 전략 결정론자',
-           confidence: 0.89,
-           sentiment: 'favorable',
-           findings: [
-             "최근 5경기 xG 데이터 분석 결과 1.82 득점 기대치 확보.",
-             "해외 주요 오즈메이커들의 배당이 홈팀 우세 방향으로 12% 하락 조정됨.",
-             "상대팀 수비 핵심 부재에 따른 오버 스코어 공략 추천."
-           ],
-           predictedScore: selectedMatch.previewScore || "2:1",
-           kellyResult: demoKelly
-         }
-       ];
-       setResults(demoResults);
-    } finally {
-      setIsInferring(false);
-    }
-  };
-
-  const handlePlaceBet = () => {
-    if (!betPick) return;
-    setIsBetPlaced(true);
-  };
 
   // Reset helper for Global Home recovery
   const resetToHome = () => {
@@ -496,30 +368,16 @@ export const MatchTerminal: React.FC = () => {
           )}
         </AnimatePresence>
 
-        {/* Row 2: Today's Pick Bar */}
         <div className="recommend-bar">
-          <span className="recommend-title">{formattedToday} 추천</span>
-          <span 
-            className={`recommend-action ${showOnlyValueBets ? 'filtering-active' : ''}`}
-            onClick={() => {
-              setShowOnlyValueBets(!showOnlyValueBets);
-              setSelectedSport('all'); // Show all sports when analyzing recommendations
-              setActiveTab('home');
-            }}
-          >
-            {showOnlyValueBets ? '전체 보기' : `AI 추천 ${aiRecommendedCount}경기 ›`}
-          </span>
+          <span className="recommend-title">{formattedToday} 경기 정보</span>
+          <span className="recommend-action">예측 모델 검증 대기</span>
         </div>
 
         {/* Row 3: Sport Navigation Tabs */}
         <nav className="sport-tabs-bar">
           {[
             { id: 'all', label: '전체', icon: null },
-            { id: 'soccer', label: '축구', icon: '⚽' },
-            { id: 'baseball', label: '야구', icon: '⚾' },
-            { id: 'basketball', label: '농구', icon: '🏀' },
-            { id: 'football', label: '미식', icon: '🏈' },
-            { id: 'tennis', label: '테니스', icon: '🎾' }
+            { id: 'soccer', label: '축구', icon: '⚽' }
           ].map(tab => (
             <button 
               key={tab.id}
@@ -558,7 +416,7 @@ export const MatchTerminal: React.FC = () => {
                   const formattedTime = new Date(match.startTime).toLocaleTimeString('ko-KR', {
                     hour: 'numeric',
                     minute: '2-digit',
-                    hour12: true
+                    hour12: true, timeZone: 'Asia/Seoul'
                   });
                   return (
                     <div 
@@ -566,9 +424,6 @@ export const MatchTerminal: React.FC = () => {
                       className={`m-match-card ${selectedMatch.id === match.id ? 'selected' : ''} ${isValue ? 'bet-match' : 'skip-match'}`}
                       onClick={() => {
                         setSelectedMatch(match);
-                        setResults([]);
-                        setIsBetPlaced(false);
-                        setBetPick(null);
                         setActiveTab('analysis');
                       }}
                     >
@@ -583,7 +438,7 @@ export const MatchTerminal: React.FC = () => {
                             <Heart size={18} color={bookmarkedIds.has(match.id) ? '#ff3d00' : '#666'} fill={bookmarkedIds.has(match.id) ? '#ff3d00' : 'none'} />
                           </button>
                           <div className={`decision-pill-badge ${isValue ? 'bet' : 'skip'}`}>
-                            {isValue ? 'BET ✓' : 'SKIP'}
+                            {match.fixtureStatus === 'NS' ? '예정 · 미분석' : '경기 정보'}
                           </div>
                         </div>
                       </div>
@@ -597,9 +452,9 @@ export const MatchTerminal: React.FC = () => {
                       <div className="card-footer-row">
                         <span className="match-time-label">{formattedTime}</span>
                         <div className="match-odds-group">
-                          <span className={`odds-box ${isValue ? 'highlight' : ''}`}>승 {match.odds.win}</span>
-                          <span className="odds-box">무 {match.odds.draw}</span>
-                          <span className="odds-box">패 {match.odds.loss}</span>
+                          <span className={`odds-box ${isValue ? 'highlight' : ''}`}>승 {formatOdds(match.odds.win)}</span>
+                          <span className="odds-box">무 {formatOdds(match.odds.draw)}</span>
+                          <span className="odds-box">패 {formatOdds(match.odds.loss)}</span>
                         </div>
                         {match.kellyResult && (
                           <div className="kelly-percent-badge">
@@ -613,8 +468,8 @@ export const MatchTerminal: React.FC = () => {
               ) : (
                 <div className="no-matches-screen">
                   <Flame size={40} className="no-match-glow-icon" />
-                  <p className="no-match-primary">오늘 해당 종목 경기가 없습니다</p>
-                  <span className="no-match-sub">AI 핵심 인텔리전스 시스템이 다음 전술 매치업을 수집 중입니다.</span>
+                  <p className="no-match-primary">{loadingMatches ? '경기 정보를 불러오는 중입니다' : loadError ? '경기 데이터 연결 오류' : '조건에 맞는 경기가 없습니다'}</p>
+                  <span className="no-match-sub" role={loadError ? 'alert' : undefined}>{loadError || '조회 기준: 한국시간 오늘. 예측 및 추천은 검증 후 제공됩니다.'}</span>
                 </div>
               )}
             </div>
@@ -623,205 +478,33 @@ export const MatchTerminal: React.FC = () => {
 
         {activeTab === 'analysis' && (
           <div className="analysis-view-wrapper">
-            {matches.length === 0 ? (
-              <div className="no-matches-screen" style={{ marginTop: '40px' }}>
-                <Flame size={40} className="no-match-glow-icon" />
-                <p className="no-match-primary">분석할 경기가 없습니다</p>
-                <span className="no-match-sub">오늘 진행되는 베트맨 지원 경기가 수집되면 실시간 AI 분석 기동이 가능합니다.</span>
+            <div className="details-card-container">
+              <h2 className="analysis-teams-title">{selectedMatch.id ? `${selectedMatch.teams.home} vs ${selectedMatch.teams.away}` : '선택된 경기가 없습니다'}</h2>
+              <div className="recommendation-banner skip">
+                <div className="banner-title">예측 제공 준비 중</div>
+                <p className="banner-desc">검증된 예측 모델이 연결되기 전까지 예상 스코어, 승률, 신뢰도 및 추천 금액을 제공하지 않습니다.</p>
               </div>
-            ) : (
-              <div className="details-card-container">
-                <div className="details-match-header">
-                  <span className="analysis-brand-tag">전략 전술 분석</span>
-                  <h2 className="analysis-teams-title">
-                    {selectedMatch.teams.home} <span>VS</span> {selectedMatch.teams.away}
-                  </h2>
+              {selectedMatch.id && (
+                <div className="metric-box-card">
+                  <p>경기 출처: {selectedMatch.dataSource || '미확인'}</p>
+                  <p>경기 상태: {selectedMatch.fixtureStatus || '미확인'}</p>
+                  <p>수집 시각: {selectedMatch.fetchedAt ? new Date(selectedMatch.fetchedAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) : '미확인'} (한국시간)</p>
+                  <p>배당 출처: {selectedMatch.bookmaker || '미수집'}</p>
+                  <p>승 {formatOdds(selectedMatch.odds.win)} / 무 {formatOdds(selectedMatch.odds.draw)} / 패 {formatOdds(selectedMatch.odds.loss)}</p>
+                  <p>해외 배당은 국내 구매 배당과 다를 수 있습니다.</p>
                 </div>
-
-                {activeKelly && (
-                  <div className={`recommendation-banner ${activeKelly.isValueBet ? 'bet' : 'skip'}`}>
-                    <div className="banner-title">
-                      {activeKelly.isValueBet ? '베팅 추천' : '패스 추천'}
-                    </div>
-                    <div className="banner-desc">
-                      {consensus ? (
-                        consensus.findings[0]
-                      ) : (
-                        activeKelly.isValueBet 
-                          ? "최근 통계 기대 우위가 해외 기준배당을 초과하여 켈리 공식상 높은 에지가 형성되었습니다."
-                          : "기대 배당 확률 대비 기대 가치가 낮게 관측되어 리스크 관리를 위해 스킵을 권고합니다."
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Capital Stake Calculator */}
-                {activeKelly && (
-                  <div className="capital-calculator-card">
-                    <div className="capital-input-field">
-                      <span className="label">보유 자본금</span>
-                      <div className="input-group">
-                        <input 
-                          type="number"
-                          value={capital}
-                          onChange={(e) => updateCapital(Math.max(0, parseInt(e.target.value) || 0))}
-                        />
-                        <span className="unit">원</span>
-                      </div>
-                    </div>
-
-                    <div className="recommended-stake-output">
-                      <span className="output-label">추천 베팅액</span>
-                      <div className="output-value">
-                        <span className="amount">
-                          {activeKelly.isValueBet ? (capital * activeKelly.fractionalKelly).toLocaleString([], { maximumFractionDigits: 0 }) : '0'}
-                        </span>
-                        <span className="amount-unit">원</span>
-                      </div>
-                      <span className="fraction-label">
-                        (보수적 쿼터 켈리 비율 {(activeKelly.fractionalKelly * 100).toFixed(2)}% 적용액)
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Inference Engine Action Button */}
-                <button 
-                  className={`analysis-engine-btn ${isInferring ? 'loading' : ''}`}
-                  onClick={handleExecute}
-                  disabled={isInferring}
-                >
-                  {isInferring ? <Loader2 size={18} className="spin-icon" /> : <Zap size={18} fill="currentColor" />}
-                  <span>{isInferring ? "실시간 분석 분석 도출 중..." : "AI 실시간 전술 분석 기동"}</span>
-                </button>
-
-                {/* Details Agent Accordion */}
-                {(results.length > 0 || activeKelly) && (
-                  <div className="agents-report-accordion">
-                    <button 
-                      onClick={() => setIsDetailsOpen(!isDetailsOpen)}
-                      className="accordion-toggle-btn"
-                    >
-                      <span>{isDetailsOpen ? '상세 리포트 및 지표 숨기기 ▲' : '상세 리포트 및 지표 더보기 ▼'}</span>
-                    </button>
-
-                    <AnimatePresence>
-                      {isDetailsOpen && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="accordion-content-box"
-                        >
-                          <div className="metrics-column-layout">
-                            <div className="metric-box-card">
-                              <span className="box-label">예측 스코어</span>
-                              <span className="box-value highlighted">
-                                {consensus ? (consensus.predictedScore || selectedMatch.previewScore) : selectedMatch.previewScore}
-                              </span>
-                            </div>
-
-                            <div className="metric-box-card">
-                              <div className="metrics-header-row">
-                                <span className="box-label">종합 신뢰도</span>
-                                <span className="box-value font-neon">
-                                  {((consensus ? consensus.confidence : 0.85) * 100).toFixed(1)}%
-                                </span>
-                              </div>
-                              <div className="progress-bar-track">
-                                <div 
-                                  className="progress-bar-fill" 
-                                  style={{ width: `${(consensus ? consensus.confidence : 0.85) * 100}%` }} 
-                                />
-                              </div>
-                            </div>
-
-                            <div className="metric-box-card">
-                              <span className="box-label">핵심 인사이트</span>
-                              <p className="insight-text-quote">
-                                "{consensus ? consensus.findings[1] : '공수 밸런스 및 xG 시뮬레이션 지수가 우세하여 포트폴리오 편입에 적합합니다.'}"
-                              </p>
-                            </div>
-
-                            {activeKelly && (
-                              <div className="kelly-detail-metrics-row">
-                                <div className="small-metric-pill">
-                                  <span className="pill-label">이론 켈리</span>
-                                  <span className="pill-value">{(activeKelly.kellyFraction * 100).toFixed(1)}%</span>
-                                </div>
-                                <div className="small-metric-pill">
-                                  <span className="pill-label">에지 비율</span>
-                                  <span className="pill-value text-blue">{(activeKelly.edge * 100).toFixed(1)}%</span>
-                                </div>
-                                <div className="small-metric-pill">
-                                  <span className="pill-label">북메이커 확률</span>
-                                  <span className="pill-value">{(activeKelly.impliedProb * 100).toFixed(1)}%</span>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+            </div>
           </div>
         )}
 
         {activeTab === 'strategy' && (
           <div className="strategy-view-wrapper">
-            {matches.length === 0 ? (
-              <div className="no-matches-screen" style={{ marginTop: '40px' }}>
-                <Wallet size={40} className="no-match-glow-icon" style={{ color: '#666' }} />
-                <p className="no-match-primary">베팅할 경기가 없습니다</p>
-                <span className="no-match-sub">전술 포트폴리오를 구성할 축구 경기가 연동되면 베팅 전표 기능이 활성화됩니다.</span>
-              </div>
-            ) : (
-              <div className="slip-main-card">
-                <div className="slip-card-header">
-                  <Wallet size={20} color="#ffbf00" />
-                  <span className="slip-title">베팅 전략 전표</span>
-                </div>
-
-                <div className="slip-data-body">
-                  <div className="slip-match-info">
-                    <span className="label">타겟 경기</span>
-                    <span className="value">{selectedMatch.teams.home} vs {selectedMatch.teams.away}</span>
-                  </div>
-
-                  <div className="slip-pick-actions">
-                    {['WIN', 'DRAW', 'LOSS'].map(type => (
-                      <button 
-                        key={type}
-                        className={`pick-option-btn ${betPick === type ? 'selected' : ''}`}
-                        onClick={() => { setBetPick(type as any); setIsBetPlaced(false); }}
-                      >
-                        <span className="pick-label">{type === 'WIN' ? '승' : type === 'DRAW' ? '무' : '패'}</span>
-                        <span className="pick-odds">x{type === 'WIN' ? selectedMatch.odds.win : type === 'DRAW' ? selectedMatch.odds.draw : selectedMatch.odds.loss}</span>
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="slip-earning-meta">
-                    <span className="meta-label">예상 배당률</span>
-                    <span className="meta-value">
-                      {betPick ? `${(betPick === 'WIN' ? selectedMatch.odds.win : betPick === 'DRAW' ? selectedMatch.odds.draw : selectedMatch.odds.loss).toFixed(2)}배` : '-'}
-                    </span>
-                  </div>
-
-                  <button 
-                    className={`slip-submit-btn ${isBetPlaced ? 'success' : ''}`}
-                    onClick={handlePlaceBet}
-                    disabled={!betPick || isBetPlaced}
-                  >
-                    {isBetPlaced ? <CheckCircle2 size={20} /> : <Fingerprint size={20} />}
-                    <span>{isBetPlaced ? "전략 전표 접수 완료" : "베팅 전표 서명 및 승인"}</span>
-                  </button>
-                </div>
-              </div>
-            )}
+            <div className="slip-main-card">
+              <h3>예측 검증 대기</h3>
+              <p>검증된 확률과 경기 전 기록이 준비될 때까지 추천 금액과 전표 접수 기능을 제공하지 않습니다.</p>
+              <p>이 앱에서 실제 구매나 베팅은 실행되지 않습니다.</p>
+            </div>
           </div>
         )}
 
@@ -851,63 +534,21 @@ export const MatchTerminal: React.FC = () => {
 
         {activeTab === 'chat' && (
           <div className="chat-view-wrapper">
-            <div className="chat-header">
-              <MessageSquare size={20} color="#00e676" />
-              <h3>AI 스포츠 분석 어시스턴트</h3>
-            </div>
-            
-            <div className="chat-history-container custom-scrollbar">
-              {chatHistory.length === 0 ? (
-                <div className="chat-empty-state">
-                  <Bot size={40} className="bot-icon" />
-                  <p>궁금한 점을 물어보세요!</p>
-                  <div className="chat-suggestions">
-                    {["오늘 추천 경기는?", "켈리 비율이 뭔가요?", "월드컵 일정 알려줘"].map(q => (
-                      <button key={q} onClick={() => handleSendChat(q)} className="suggestion-btn">
-                        {q}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                chatHistory.map((msg, i) => (
-                  <div key={i} className={`chat-message ${msg.role}`}>
-                    <div className="message-bubble">{msg.content}</div>
-                  </div>
-                ))
-              )}
-              {isChatLoading && (
-                <div className="chat-message assistant">
-                  <div className="message-bubble loading"><Loader2 size={16} className="spin-icon" /> 답변 작성 중...</div>
-                </div>
-              )}
-            </div>
-
-            <div className="chat-input-area">
-              <input 
-                type="text" 
-                value={chatInput} 
-                onChange={e => setChatInput(e.target.value)} 
-                onKeyDown={e => {
-                  if (e.key === 'Enter') handleSendChat(chatInput);
-                }}
-                placeholder="질문을 입력하세요..." 
-                disabled={isChatLoading}
-              />
-              <button onClick={() => handleSendChat(chatInput)} disabled={isChatLoading || !chatInput.trim()}>
-                <Send size={18} />
-              </button>
+            <div className="chat-empty-state">
+              <Bot size={40} className="bot-icon" />
+              <h3>분석 채팅 준비 중</h3>
+              <p>검증된 경기 근거와 예측 모델이 연결된 뒤 제공됩니다. 현재는 홈에서 경기 정보와 배당 수집 상태를 확인해 주세요.</p>
             </div>
           </div>
         )}
 
         {activeTab === 'profile' && (() => {
           const thisMonthStr = new Date().toISOString().substring(0, 7);
-          const thisMonthMatches = bookmarkedMatches.filter(b => b.bet_date && b.bet_date.startsWith(thisMonthStr) && b.is_correct !== null);
+          const thisMonthMatches = bookmarkedMatches.filter(b => b.bet_date && b.bet_date.startsWith(thisMonthStr) && typeof b.is_correct === 'boolean');
           const thisMonthHits = thisMonthMatches.filter(b => b.is_correct).length;
           const thisMonthRate = thisMonthMatches.length > 0 ? Math.round((thisMonthHits / thisMonthMatches.length) * 100) : 0;
           
-          const totalResolved = bookmarkedMatches.filter(b => b.is_correct !== null).length;
+          const totalResolved = bookmarkedMatches.filter(b => typeof b.is_correct === 'boolean').length;
           const totalHits = bookmarkedMatches.filter(b => b.is_correct).length;
           const totalRate = totalResolved > 0 ? Math.round((totalHits / totalResolved) * 100) : 0;
 
@@ -915,7 +556,7 @@ export const MatchTerminal: React.FC = () => {
             <div className="profile-view-wrapper">
               <div className="profile-header" style={{ display: session ? 'flex' : 'none' }}>
                 <User size={20} color="#00e676" />
-                <h3>내 베팅 히스토리</h3>
+                <h3>관심 경기 및 수동 기록</h3>
               </div>
 
               <div className="profile-auth-section" style={{ display: session ? 'flex' : 'none' }}>
@@ -1031,6 +672,7 @@ export const MatchTerminal: React.FC = () => {
                 )}
               </div>
 
+              <p>아래 수치는 사용자가 직접 입력한 관심 경기 기록이며, AI 모델 성능이나 공식 경기 결과가 아닙니다.</p>
               <div className="history-stats">
                 <div className="stat-box">
                   <span className="stat-label">총 찜</span>
@@ -1041,11 +683,11 @@ export const MatchTerminal: React.FC = () => {
                   <span className="stat-value">{totalHits}</span>
                 </div>
                 <div className="stat-box">
-                  <span className="stat-label">전체 적중률</span>
+                  <span className="stat-label">수동 기록 적중률</span>
                   <span className="stat-value">{totalRate}%</span>
                 </div>
                 <div className="stat-box">
-                  <span className="stat-label">이번달 적중률</span>
+                  <span className="stat-label">이번달 수동 적중률</span>
                   <span className="stat-value">{thisMonthRate}%</span>
                 </div>
               </div>
@@ -1059,7 +701,7 @@ export const MatchTerminal: React.FC = () => {
         {[
           { id: 'home', label: '홈', icon: LayoutGrid },
           { id: 'analysis', label: '분석', icon: Cpu },
-          { id: 'strategy', label: '베팅', icon: ExternalLink },
+          { id: 'strategy', label: '검증', icon: ExternalLink },
           { id: 'chat', label: '채팅', icon: MessageSquare },
           { id: 'profile', label: '내정보', icon: User }
         ].map(menu => {

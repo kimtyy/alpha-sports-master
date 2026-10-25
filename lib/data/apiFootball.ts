@@ -1,200 +1,100 @@
-import { MatchData } from '../agents/orchestrator';
-import { MOCK_MATCHES } from './matches';
+import type { MatchData } from '../agents/orchestrator';
 
-const API_KEY = process.env.APIFOOTBALL_KEY || '';
 const BASE_URL = 'https://v3.football.api-sports.io';
+const LEAGUES = [39, 140, 78, 61, 135, 292, 293];
+export class MatchDataUnavailable extends Error {}
 
-const getLeagueAbbr = (id: number, name: string): string => {
-  switch (id) {
-    case 39: return 'EPL';
-    case 140: return 'LALIGA';
-    case 78: return 'BUND';
-    case 61: return 'LIGUE1';
-    case 135: return 'SERIEA';
-    case 2: return 'UCL';
-    case 3: return 'UEL';
-    case 292: return 'K1';
-    case 293: return 'K2';
-    case 98: return 'J1';
-    case 169: return 'CSL';
-    case 253: return 'MLS';
-    case 71: return 'BRA1';
-    case 128: return 'ARG1';
-    case 1: return 'WC';
-    case 17: return 'ACL';
-    default: return name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase();
-  }
-};
+export function koreanDate(now = new Date()): string {
+  return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
 
-const getTeamAbbr = (name: string): string => {
-  const clean = name.replace(/[^a-zA-Z0-9]/g, '');
-  return clean.length >= 3 ? clean.slice(0, 3).toUpperCase() : name.slice(0, 3).toUpperCase();
-};
+export function seasonFor(league: number, date: string): number {
+  const year = Number(date.slice(0, 4));
+  const month = Number(date.slice(5, 7));
+  return league === 292 || league === 293 ? year : year - (month < 7 ? 1 : 0);
+}
 
-const getFallbackOdds = (fixtureId: number) => {
-  const seed = fixtureId % 100;
-  const win = 1.5 + (seed % 15) * 0.1; // 1.5 to 2.9
-  const draw = 3.0 + (seed % 6) * 0.1; // 3.0 to 3.5
-  const loss = 2.0 + (seed % 25) * 0.2; // 2.0 to 6.8
-  return {
-    win: Math.round(win * 100) / 100,
-    draw: Math.round(draw * 100) / 100,
-    loss: Math.round(loss * 100) / 100
+export function parseOdds(values: { value: string; odd: string }[]) {
+  const odds = {
+    win: Number(values.find(v => v.value === 'Home')?.odd),
+    draw: Number(values.find(v => v.value === 'Draw')?.odd),
+    loss: Number(values.find(v => v.value === 'Away')?.odd),
   };
-};
+  return Object.values(odds).every(n => Number.isFinite(n) && n > 1) ? odds : null;
+}
+
+// No caching of failures; HTTP 200 provider errors are failures as well.
+async function request(path: string, apiKey: string) {
+  const response = await fetch(`${BASE_URL}${path}`, {
+    headers: { 'x-apisports-key': apiKey },
+    cache: 'no-store',
+    signal: AbortSignal.timeout(12000),
+  });
+  if (!response.ok) throw new MatchDataUnavailable('경기 데이터 제공업체에 연결할 수 없습니다.');
+  const json = await response.json();
+  if ((json.errors && Object.keys(json.errors).length > 0) || !Array.isArray(json.response)) {
+    throw new MatchDataUnavailable('경기 데이터 제공업체의 응답을 확인할 수 없습니다.');
+  }
+  return json;
+}
 
 export async function fetchTodayMatches(): Promise<MatchData[]> {
-  console.log('[API_FOOTBALL] Starting fetchTodayMatches...');
-
-  if (!API_KEY || API_KEY === 'your_api_football_key_here') {
-    console.warn('[API_FOOTBALL] APIFOOTBALL_KEY is missing or using default placeholder. Graceful fallback to MOCK_MATCHES.');
-    return MOCK_MATCHES;
+  const apiKey = process.env.APIFOOTBALL_KEY;
+  if (!apiKey || apiKey === 'your_api_football_key_here') {
+    throw new MatchDataUnavailable('경기 데이터 연결이 설정되지 않았습니다.');
   }
+  const date = koreanDate();
+  const fetchedAt = new Date().toISOString();
+  const responses = await Promise.all(LEAGUES.map(league =>
+    request(`/fixtures?date=${date}&league=${league}&season=${seasonFor(league, date)}&timezone=Asia%2FSeoul`, apiKey)
+  ));
+  const fixtures = responses.flatMap(r => r.response);
+  if (!fixtures.length) return [];
 
+  const oddsMap = new Map<number, { odds: MatchData['odds']; bookmaker: string }>();
   try {
-    const now = new Date();
-    const offset = now.getTimezoneOffset() * 60000;
-    const localISOTime = (new Date(now.getTime() - offset)).toISOString();
-    const todayDate = localISOTime.split('T')[0];
-
-    // API-Football v3 accepts only ONE league per request
-    // Filtered to Betman supported leagues only:
-    // - K League 1/2, Premier League, La Liga, Bundesliga, Serie A, Ligue 1
-    const leagueConfigs = [
-      { id: 39, season: '2025' }, // EPL
-      { id: 140, season: '2025' }, // 라리가
-      { id: 78, season: '2025' }, // 분데스리가
-      { id: 61, season: '2025' }, // 리그1
-      { id: 135, season: '2025' }, // 세리에A
-      { id: 292, season: '2025' }, // K리그1
-      { id: 293, season: '2025' }  // K리그2
-    ];
-
-    console.log(`[API_FOOTBALL] Fetching fixtures for Date: ${todayDate}, ${leagueConfigs.length} leagues`);
-
-    // 1. Fetch Today's Fixtures (per-league, parallel)
-    const fixturePromises = leagueConfigs.map(config =>
-      fetch(
-        `${BASE_URL}/fixtures?date=${todayDate}&league=${config.id}&season=${config.season}`,
-        {
-          method: 'GET',
-          headers: {
-            'x-apisports-key': API_KEY,
-          },
-          next: { revalidate: 3600 } // Cache for 1 hour
-        }
-      ).then(async res => {
-        if (!res.ok) {
-          console.warn(`[API_FOOTBALL] League ${config.id} fetch failed: ${res.status} ${res.statusText}`);
-          return [];
-        }
-        const json = await res.json();
-        console.log(`[API_FOOTBALL] League ${config.id}: ${json.response?.length ?? 0} fixtures, errors: ${JSON.stringify(json.errors || {})}`);
-        return json.response || [];
-      }).catch(err => {
-        console.warn(`[API_FOOTBALL] League ${config.id} error:`, err);
-        return [];
-      })
-    );
-
-    const allResults = await Promise.all(fixturePromises);
-    const fixturesList = allResults.flat();
-
-    console.log(`[API_FOOTBALL] Total fixtures found: ${fixturesList.length}`);
-
-    if (fixturesList.length === 0) {
-      console.log('[API_FOOTBALL] No fixtures found for today across all leagues. Returning empty list.');
-      return [];
+    // Read every page before accepting any odds, avoiding silent partial coverage.
+    const collected = [];
+    let total = 1;
+    for (let page = 1; page <= total; page++) {
+      const json = await request(`/odds?date=${date}&timezone=Asia%2FSeoul&page=${page}`, apiKey);
+      total = Number(json.paging?.total ?? 1);
+      if (!Number.isInteger(total) || total < 1 || total > 50) throw new Error('Invalid pagination');
+      collected.push(...json.response);
     }
-
-    // 2. Fetch Odds for Today
-    console.log(`[API_FOOTBALL] Fetching odds for today...`);
-    const oddsMap: Record<number, { win: number; draw: number; loss: number }> = {};
-
-    const fetchSeasonOdds = async (seasonStr: string) => {
-      try {
-        const oddsRes = await fetch(
-          `${BASE_URL}/odds?date=${todayDate}&season=${seasonStr}`,
-          {
-            method: 'GET',
-            headers: {
-              'x-apisports-key': API_KEY,
-            },
-            next: { revalidate: 3600 }
-          }
-        );
-
-        if (oddsRes.ok) {
-          const oddsJson = await oddsRes.json();
-          const oddsList = oddsJson.response || [];
-          
-          for (const item of oddsList) {
-            const fixtureId = item.fixture.id;
-            const bookmaker = item.bookmakers.find((b: any) => b.name === 'Bet365') || item.bookmakers[0];
-            if (bookmaker) {
-              const bet = bookmaker.bets.find((b: any) => b.name === 'Match Winner');
-              if (bet) {
-                const homeOdd = bet.values.find((v: any) => v.value === 'Home')?.odd;
-                const drawOdd = bet.values.find((v: any) => v.value === 'Draw')?.odd;
-                const awayOdd = bet.values.find((v: any) => v.value === 'Away')?.odd;
-                if (homeOdd && drawOdd && awayOdd) {
-                  oddsMap[fixtureId] = {
-                    win: parseFloat(homeOdd),
-                    draw: parseFloat(drawOdd),
-                    loss: parseFloat(awayOdd)
-                  };
-                }
-              }
-            }
-          }
-        } else {
-          console.warn(`[API_FOOTBALL] Odds query returned an error for season ${seasonStr}.`);
-        }
-      } catch (err) {
-        console.error(`[API_FOOTBALL] Error fetching odds for season ${seasonStr}`, err);
-      }
-    };
-
-    await Promise.all([fetchSeasonOdds('2025'), fetchSeasonOdds('2026')]);
-
-    // 3. Map to MatchData interface
-    const mappedMatches: MatchData[] = fixturesList.map((item: any, index: number) => {
-      const fixtureId = item.fixture.id;
-      const homeTeam = item.teams.home.name;
-      const awayTeam = item.teams.away.name;
-      const leagueName = item.league.name;
-      const leagueId = item.league.id;
-      const startTime = item.fixture.date;
-      const city = item.fixture.venue?.city || '';
-
-      const odds = oddsMap[fixtureId] || getFallbackOdds(fixtureId);
-      const leagueAbbr = getLeagueAbbr(leagueId, leagueName);
-      const homeAbbr = getTeamAbbr(homeTeam);
-      const awayAbbr = getTeamAbbr(awayTeam);
-      const code = `${leagueAbbr}-2526-${homeAbbr}-${awayAbbr}`;
-
-      return {
-        id: fixtureId.toString(),
-        code,
-        sport: 'soccer',
-        city,
-        teams: {
-          home: homeTeam.toUpperCase(),
-          away: awayTeam.toUpperCase()
-        },
-        league: leagueName,
-        odds,
-        startTime,
-        isFeatured: index === 0, // Mark first match as featured
-        previewScore: `${Math.floor(Math.random() * 3)}:${Math.floor(Math.random() * 3)}`
-      };
-    });
-
-    console.log(`[API_FOOTBALL] Successfully mapped ${mappedMatches.length} live matches.`);
-    return mappedMatches;
-
-  } catch (error) {
-    console.error('[API_FOOTBALL] Error in fetchTodayMatches. Returning empty list [].', error);
-    return [];
+    for (const item of collected) {
+      const bookmakers = item.bookmakers || [];
+      const bookmaker = bookmakers.find((b: any) => b.name === 'Bet365') || bookmakers[0];
+      const bet = bookmaker?.bets?.find((b: any) => b.name === 'Match Winner');
+      const odds = bet && Array.isArray(bet.values) ? parseOdds(bet.values) : null;
+      if (odds) oddsMap.set(item.fixture.id, { odds, bookmaker: bookmaker.name });
+    }
+  } catch {
+    oddsMap.clear(); // Fixture information remains available, odds explicitly unavailable.
   }
+
+  return fixtures.map((item: any) => {
+    if (!item.fixture?.id || !item.fixture?.status?.short ||
+        !Number.isFinite(Date.parse(item.fixture?.date)) ||
+        !item.teams?.home?.name || !item.teams?.away?.name || !item.league?.name) {
+      throw new MatchDataUnavailable('경기 데이터 형식이 올바르지 않습니다.');
+    }
+    const found = oddsMap.get(item.fixture.id);
+    return {
+      id: String(item.fixture.id),
+      code: `${item.league.id}-${item.fixture.id}`,
+      sport: 'soccer',
+      city: item.fixture.venue?.city || '',
+      teams: { home: item.teams.home.name, away: item.teams.away.name },
+      league: item.league.name,
+      startTime: item.fixture.date,
+      fixtureStatus: item.fixture.status.short,
+      dataSource: 'API-Football',
+      fetchedAt,
+      // Zero is a compatibility sentinel, never a usable decimal price or model input.
+      odds: found?.odds || { win: 0, draw: 0, loss: 0 },
+      oddsStatus: found ? 'AVAILABLE' : 'UNAVAILABLE',
+      bookmaker: found?.bookmaker,
+    };
+  });
 }
