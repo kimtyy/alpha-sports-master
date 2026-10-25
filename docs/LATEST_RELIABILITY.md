@@ -39,3 +39,7 @@ Supabase project zowkcuccvdlwqcckwkpm was accessed through the connected plugin.
 - match_analyses uses analyzed_at, not created_at. Legacy analysis remains disabled.
 - Login-only ownership policies are needed for profiles (id=auth.uid()) and bookmarks (device_id=auth.uid()::text), together with least-privilege grants. Guest device IDs must not be treated as authorization. UI guest saving/migration and false optimistic success need coordinated revision before these policies are enabled.
 - Provider service key setup and actual DB write tests remain outstanding.
+
+## Ownership repair and release
+
+Applied authenticated_record_ownership to the connected production DB: owner-scoped policies for profiles/bookmarks, minimal browser grants, no browser access to global analyses/ratings, unique bookmark per owner/fixture. UI now requires sign-in for saving, removes untrusted device-ID migration, waits for successful DB writes, reports errors, and uses Korean date for bet_date. Build and 14 regression tests pass. Live rollback-only SQL verification: owner bookmark insert/read/update succeeds, foreign-owner read/insert and anonymous read are denied; grade escalation denied. Synthetic data rolled back. No real login account was created or modified. Service-role key remains an external configuration prerequisite for cron; prediction and Elo remain paused.

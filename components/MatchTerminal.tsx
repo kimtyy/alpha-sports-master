@@ -126,13 +126,6 @@ export const MatchTerminal: React.FC = () => {
   const [bookmarkedMatches, setBookmarkedMatches] = useState<any[]>([]);
 
   useEffect(() => {
-    let localId = localStorage.getItem('asm_device_id');
-    if (!localId) {
-      localId = 'dev_' + Math.random().toString(36).substring(2, 9) + Date.now();
-      localStorage.setItem('asm_device_id', localId);
-    }
-    const safeLocalId = localId;
-
     const fetchBookmarks = async (targetId: string) => {
       const { data } = await supabase.from('bookmarks').select('*').eq('device_id', targetId);
       if (data) {
@@ -145,25 +138,14 @@ export const MatchTerminal: React.FC = () => {
     };
 
     const fetchProfile = async (user: any) => {
-      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-      const defaultNickname = getNicknameFromEmail(user.email);
-
-      if (data) {
-        if (!data.nickname || data.nickname.startsWith('User_')) {
-          const updatedProfile = { ...data, nickname: defaultNickname };
-          setProfile(updatedProfile);
-          setCapital(Number(data.capital));
-          await supabase.from('profiles').update({ nickname: defaultNickname }).eq('id', user.id);
-        } else {
-          setProfile(data);
-          setCapital(Number(data.capital));
-        }
-      } else {
-        const newProfile = { id: user.id, email: user.email, nickname: defaultNickname, capital: 1000000, grade: 'free' };
-        await supabase.from('profiles').insert(newProfile);
-        setProfile(newProfile);
-        setCapital(1000000);
-      }
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+      if (error) { setAuthError('프로필을 불러오지 못했습니다. 다시 로그인해주세요.'); return; }
+      if (data) { setProfile(data); setCapital(Number(data.capital)); return; }
+      const { data: created, error: saveError } = await supabase.from('profiles').insert({
+        id: user.id, email: user.email, nickname: getNicknameFromEmail(user.email), capital: 1000000, grade: 'free'
+      }).select().single();
+      if (saveError || !created) { setAuthError('프로필 저장에 실패했습니다.'); return; }
+      setProfile(created); setCapital(Number(created.capital));
     };
 
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -173,29 +155,23 @@ export const MatchTerminal: React.FC = () => {
         fetchBookmarks(session.user.id);
         fetchProfile(session.user);
       } else {
-        setDeviceId(safeLocalId);
-        fetchBookmarks(safeLocalId);
+        setDeviceId('');
+        setBookmarkedIds(new Set());
+        setBookmarkedMatches([]);
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) {
         const userId = session.user.id;
         setDeviceId(userId);
         
-        if (safeLocalId) {
-          const { data: localBookmarks } = await supabase.from('bookmarks').select('id').eq('device_id', safeLocalId);
-          if (localBookmarks && localBookmarks.length > 0) {
-            await supabase.from('bookmarks').update({ device_id: userId }).eq('device_id', safeLocalId);
-          }
-        }
-        
-        fetchBookmarks(userId);
-        fetchProfile(session.user);
+        setTimeout(() => { void fetchBookmarks(userId); void fetchProfile(session.user); }, 0);
       } else {
-        setDeviceId(safeLocalId);
-        fetchBookmarks(safeLocalId);
+        setDeviceId('');
+        setBookmarkedIds(new Set());
+        setBookmarkedMatches([]);
         setProfile(null);
       }
     });
@@ -247,75 +223,44 @@ export const MatchTerminal: React.FC = () => {
   };
 
   const updateCapital = async (newVal: number) => {
-    setCapital(newVal);
-    if (session && profile) {
-      setProfile({ ...profile, capital: newVal });
-      await supabase.from('profiles').update({ capital: newVal }).eq('id', session.user.id);
+    if (!Number.isFinite(newVal) || newVal < 0) return;
+    if (session?.user) {
+      const { data, error } = await supabase.from('profiles').update({ capital: newVal }).eq('id', session.user.id).select('id').single();
+      if (error || !data) { alert('자금 설정을 저장하지 못했습니다.'); return; }
+      setProfile((prev: any) => ({ ...prev, capital: newVal }));
     }
+    setCapital(newVal);
   };
-
 
   const toggleBookmark = async (match: MatchData, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!deviceId) return;
-    
-    const isBookmarked = bookmarkedIds.has(match.id);
-    
-    if (isBookmarked) {
-      // Remove
-      setBookmarkedIds(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(match.id);
-        return newSet;
-      });
+    const owner = session?.user?.id;
+    if (!owner) { setAuthMode('login'); setActiveTab('profile'); setAuthError('관심 경기를 저장하려면 로그인해주세요.'); return; }
+    if (bookmarkedIds.has(match.id)) {
+      const { data, error } = await supabase.from('bookmarks').delete().eq('device_id', owner).eq('match_id', match.id).select('id');
+      if (error || !data?.length) { alert('관심 경기 삭제에 실패했습니다.'); return; }
+      setBookmarkedIds(prev => { const next = new Set(prev); next.delete(match.id); return next; });
       setBookmarkedMatches(prev => prev.filter(b => b.match_id !== match.id));
-      
-      await supabase
-        .from('bookmarks')
-        .delete()
-        .eq('device_id', deviceId)
-        .eq('match_id', match.id);
-    } else {
-      // Add
-      setBookmarkedIds(prev => new Set(prev).add(match.id));
-      
-      const matchPick = null; // No validated prediction is available.
-
-      const newBookmark = {
-        device_id: deviceId,
-        match_id: match.id,
-        home_team: match.teams.home,
-        away_team: match.teams.away,
-        league: match.league,
-        predicted_score: '',
-        kelly_percent: match.kellyResult?.fractionalKelly || 0,
-        is_value_bet: !!match.kellyResult?.isValueBet,
-        pick: matchPick,
-        kickoff_time: match.startTime,
-        bet_date: match.startTime
-      };
-      
-      const { data } = await supabase
-        .from('bookmarks')
-        .insert(newBookmark)
-        .select()
-        .single();
-        
-      if (data) {
-        setBookmarkedMatches(prev => [...prev, data]);
-      }
+      return;
     }
+    const { data, error } = await supabase.from('bookmarks').insert({
+      device_id: owner, match_id: match.id, home_team: match.teams.home, away_team: match.teams.away,
+      league: match.league, predicted_score: '', kelly_percent: 0, is_value_bet: false,
+      pick: null, kickoff_time: match.startTime,
+      bet_date: new Date(new Date(match.startTime).getTime() + 9 * 3600000).toISOString().slice(0, 10)
+    }).select().single();
+    if (error || !data) { alert('관심 경기 저장에 실패했습니다.'); return; }
+    setBookmarkedIds(prev => new Set(prev).add(match.id));
+    setBookmarkedMatches(prev => [...prev, data]);
   };
 
   const updateBookmarkResult = async (id: string, isCorrect: boolean) => {
+    if (!session?.user?.id) return;
+    const { data, error } = await supabase.from('bookmarks').update({ is_correct: isCorrect })
+      .eq('id', id).eq('device_id', session.user.id).select('id').single();
+    if (error || !data) { alert('기록 저장에 실패했습니다.'); return; }
     setBookmarkedMatches(prev => prev.map(b => b.id === id ? { ...b, is_correct: isCorrect } : b));
-    
-    await supabase
-      .from('bookmarks')
-      .update({ is_correct: isCorrect })
-      .eq('id', id);
   };
-
 
   // Dynamic Notifications Data
   const notifications = useMemo(() => {
