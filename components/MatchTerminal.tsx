@@ -26,9 +26,11 @@ const getMatchSport = (matchId: string): 'soccer' | 'baseball' | 'basketball' | 
   return 'soccer';
 };
 
-const getLeagueNameKorean = (league: string): string => {
+const getLeagueNameKorean = (league: string, leagueId?: number): string => {
+  if (leagueId === 39) return 'EPL';
+  if (leagueId === 235) return '러시아 프리미어리그';
   const l = league.toLowerCase();
-  if (l.includes('premier league') || l.includes('epl')) return 'EPL';
+  if (l === 'epl' || l === 'english premier league') return 'EPL';
   if (l.includes('la liga')) return '라리가';
   if (l.includes('bundesliga')) return '분데스리가';
   if (l.includes('k league')) return 'K리그';
@@ -273,7 +275,7 @@ export const MatchTerminal: React.FC = () => {
     });
 
     return valueBets.map((match, index) => {
-      const leagueStr = getLeagueNameKorean(match.league);
+      const leagueStr = getLeagueNameKorean(match.league, match.rawIds?.leagueId);
       return {
         id: index + 1,
         title: "AI 분석 완료 및 추천 매치 감지",
@@ -460,17 +462,8 @@ export const MatchTerminal: React.FC = () => {
 
         {/* Row 2: Today's Pick Bar */}
         <div className="recommend-bar">
-          <span className="recommend-title">{formattedToday} 추천</span>
-          <span 
-            className={`recommend-action ${showOnlyValueBets ? 'filtering-active' : ''}`}
-            onClick={() => {
-              setShowOnlyValueBets(!showOnlyValueBets);
-              setSelectedSport('all'); // Show all sports when analyzing recommendations
-              setActiveTab('home');
-            }}
-          >
-            {showOnlyValueBets ? '전체 보기' : `AI 추천 ${aiRecommendedCount}경기 ›`}
-          </span>
+          <span className="recommend-title">{formattedToday} 경기 일정</span>
+          <span className="recommend-action">예측 검증 중</span>
         </div>
 
         {/* Row 3: Sport Navigation Tabs */}
@@ -478,10 +471,6 @@ export const MatchTerminal: React.FC = () => {
           {[
             { id: 'all', label: '전체', icon: null },
             { id: 'soccer', label: '축구', icon: '⚽' },
-            { id: 'baseball', label: '야구', icon: '⚾' },
-            { id: 'basketball', label: '농구', icon: '🏀' },
-            { id: 'football', label: '미식', icon: '🏈' },
-            { id: 'tennis', label: '테니스', icon: '🎾' }
           ].map(tab => (
             <button 
               key={tab.id}
@@ -505,7 +494,7 @@ export const MatchTerminal: React.FC = () => {
           <div className="home-view-wrapper">
             <div className="today-section-header">
               <span className="section-title">
-                {showOnlyValueBets ? 'AI 추천 분석 매치' : searchQuery ? `'${searchQuery}' 검색 결과` : `7일간 일정`}
+                {showOnlyValueBets ? 'AI 추천 분석 매치' : searchQuery ? `'${searchQuery}' 검색 결과` : `오늘부터 8일간 일정`}
               </span>
               {(showOnlyValueBets || searchQuery) && (
                 <span className="section-link reset" onClick={resetToHome}>필터 해제</span>
@@ -531,7 +520,7 @@ export const MatchTerminal: React.FC = () => {
                       return (
                         <div 
                           key={match.id}
-                          className={`m-match-card ${selectedMatch.id === match.id ? 'selected' : ''} ${isValue ? 'bet-match' : 'skip-match'}`}
+                          className={`m-match-card ${selectedMatch.id === match.id ? 'selected' : ''} ${isValue ? 'bet-match' : 'pending-match'}`}
                           onClick={() => {
                             setSelectedMatch(match);
                             setResults([]);
@@ -541,7 +530,7 @@ export const MatchTerminal: React.FC = () => {
                           }}
                         >
                           <div className="card-header-row">
-                            <span className="league-name">{sportEmoji} {getLeagueNameKorean(match.league)}</span>
+                            <span className="league-name">{sportEmoji} {getLeagueNameKorean(match.league, match.rawIds?.leagueId)}</span>
                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                               <button 
                                 className="bookmark-btn" 
@@ -550,7 +539,7 @@ export const MatchTerminal: React.FC = () => {
                               >
                                 <Heart size={18} color={bookmarkedIds.has(match.id) ? '#ff3d00' : '#666'} fill={bookmarkedIds.has(match.id) ? '#ff3d00' : 'none'} />
                               </button>
-                              <div className={`decision-pill-badge ${isValue ? 'bet' : 'skip'}`}>
+                              <div className="decision-pill-badge pending">
                                 {'예측 모델 검증 대기'}
 
                               </div>
@@ -1136,8 +1125,8 @@ export const MatchTerminal: React.FC = () => {
           border: 1px solid rgba(0, 230, 118, 0.35);
           box-shadow: 0 4px 20px rgba(0, 230, 118, 0.03);
         }
-        .m-match-card.skip-match {
-          opacity: 0.4;
+        .m-match-card.pending-match {
+          opacity: 1;
         }
 
         .card-header-row {
@@ -1150,6 +1139,7 @@ export const MatchTerminal: React.FC = () => {
           font-weight: 800;
           color: #888888;
         }
+        .decision-pill-badge.pending { color: #b9c7d5; border-color: #455568; }
         .decision-pill-badge {
           font-size: 0.75rem;
           font-weight: 900;
