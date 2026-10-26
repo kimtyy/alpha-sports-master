@@ -5,23 +5,14 @@ export interface KellyResult {
   isValueBet: boolean;
   recommendation: 'BET' | 'SKIP';
   fractionalKelly: number;  // kellyFraction * 0.25 (보수적 운용)
-  confidenceScore: number;  // 에이전트 컨센서스 신뢰도 점수
 }
 
-export function calcKelly(modelProb: number, bookmakerOdds: number, confidenceScore: number = 0.80): KellyResult {
-  if (bookmakerOdds <= 0) {
-    return {
-      impliedProb: 0,
-      edge: 0,
-      kellyFraction: 0,
-      isValueBet: false,
-      recommendation: 'SKIP',
-      fractionalKelly: 0,
-      confidenceScore,
-    };
+export function calcKelly(modelProb: number, bookmakerOdds: number): KellyResult {
+  if (!Number.isFinite(modelProb) || modelProb < 0 || modelProb > 1 ||
+      !Number.isFinite(bookmakerOdds) || bookmakerOdds <= 1) {
+    throw new RangeError('Probability must be in [0, 1] and decimal odds must exceed 1.');
   }
-
-  const impliedProb = 1 / bookmakerOdds;
+  const impliedProb = bookmakerOdds > 0 ? 1 / bookmakerOdds : 0;
   const edge = modelProb - impliedProb;
 
   let kellyFraction = 0;
@@ -30,13 +21,10 @@ export function calcKelly(modelProb: number, bookmakerOdds: number, confidenceSc
     kellyFraction = edge / (1 - impliedProb);
   }
 
-  const meetsConfidence = confidenceScore >= 0.75;
-  const isValueBet = kellyFraction > 0 && meetsConfidence;
+  // f*가 0 이하면 Value Bet 없음 → 베팅 금지
+  const isValueBet = kellyFraction > 0;
   const recommendation = isValueBet ? 'BET' : 'SKIP';
-
-  const fractionalKelly = isValueBet 
-    ? Math.min(kellyFraction * 0.25, 0.25) 
-    : 0;
+  const fractionalKelly = isValueBet ? kellyFraction * 0.25 : 0;
 
   return {
     impliedProb,
@@ -45,6 +33,5 @@ export function calcKelly(modelProb: number, bookmakerOdds: number, confidenceSc
     isValueBet,
     recommendation,
     fractionalKelly,
-    confidenceScore,
   };
 }

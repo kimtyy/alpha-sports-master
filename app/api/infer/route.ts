@@ -1,24 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getOrRunMatchAnalysis } from '@/lib/analysis';
+import { NextResponse } from 'next/server';
 
-export async function POST(req: NextRequest) {
-  try {
-    const { match } = await req.json();
-    
-    if (!match || !match.id) {
-      return NextResponse.json({ success: false, error: 'Invalid match data' }, { status: 400 });
-    }
-
-    // Call getOrRunMatchAnalysis which checks Supabase match_analyses table first,
-    // and if not cached, runs 10-agent W-5 debate and saves snapshot to Supabase.
-    const results = await getOrRunMatchAnalysis(match);
-
-    return NextResponse.json({ success: true, data: results });
-  } catch (error: any) {
-    console.error('Inference API Error:', error);
-    return NextResponse.json(
-      { success: false, error: error.message || 'Internal Server Error' },
-      { status: 500 }
-    );
-  }
+// No external model calls or invented probabilities while model validation is pending.
+export async function POST() {
+  return NextResponse.json({
+    success: false,
+    code: 'MODEL_UNAVAILABLE',
+    error: '검증된 예측 모델이 아직 연결되지 않았습니다. 경기 정보만 조회할 수 있으며 승률·추천액은 제공하지 않습니다.',
+  }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
 }

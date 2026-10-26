@@ -1,0 +1,15 @@
+revoke all on public.bookmarks, public.profiles, public.match_analyses, public.elo_ratings from anon, authenticated;
+grant select, insert, delete on public.bookmarks to authenticated;
+grant update (is_correct) on public.bookmarks to authenticated;
+grant select, insert on public.profiles to authenticated;
+grant update (nickname, capital) on public.profiles to authenticated;
+create policy bookmarks_select_own on public.bookmarks for select to authenticated using (device_id = (select auth.uid())::text);
+create policy bookmarks_insert_own on public.bookmarks for insert to authenticated with check (device_id = (select auth.uid())::text);
+create policy bookmarks_update_own on public.bookmarks for update to authenticated using (device_id = (select auth.uid())::text) with check (device_id = (select auth.uid())::text);
+create policy bookmarks_delete_own on public.bookmarks for delete to authenticated using (device_id = (select auth.uid())::text);
+create policy profiles_select_own on public.profiles for select to authenticated using (id = (select auth.uid()));
+create policy profiles_insert_own on public.profiles for insert to authenticated with check (id = (select auth.uid()) and grade = 'free');
+create policy profiles_update_own on public.profiles for update to authenticated using (id = (select auth.uid())) with check (id = (select auth.uid()));
+create unique index bookmarks_owner_fixture_unique on public.bookmarks (device_id, match_id);
+comment on table public.match_analyses is 'Server-only; legacy unvalidated analyses are not exposed to browser clients.';
+comment on table public.elo_ratings is 'Server-only; rating updates paused pending validated fixture-ledger implementation.';
