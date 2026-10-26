@@ -146,3 +146,45 @@ test('pending result pagination does not hide records after page one', async () 
   const result = await settlePending(mockDb(rows), async()=>finished);
   assert.equal(result.processed,201); assert.equal(result.updated,201);
 });
+
+const oddsEntry = (id, name = 'Bet365') => ({ fixture: { id }, bookmakers: [{ name, bets: [{ name: 'Match Winner', values: [{ value: 'Home', odd: '2.5' }, { value: 'Draw', odd: '3.2' }, { value: 'Away', odd: '2.8' }] }] }] });
+test('failed later date preserves complete earlier date odds and identifies failure', async () => {
+  process.env.APIFOOTBALL_KEY = 'test-only';
+  const second = { ...fixture, fixture: { ...fixture.fixture, id: 456, date: '2026-10-26T20:00:00+09:00' } };
+  globalThis.fetch = async url => {
+    const u = new URL(url);
+    if (u.pathname === '/fixtures') return json([fixture, second]);
+    return u.searchParams.get('date') === '2026-10-25' ? json([oddsEntry(123)]) : new Response('', { status: 503 });
+  };
+  const [good, failed] = await data.fetchTodayMatches();
+  assert.equal(good.odds.win, 2.5);
+  assert.equal(good.oddsUnavailableReason, undefined);
+  assert.equal(failed.oddsUnavailableReason, 'FETCH_FAILED');
+  assert.equal(failed.odds.win, 0);
+});
+test('failed second odds page never publishes a partial first page', async () => {
+  process.env.APIFOOTBALL_KEY = 'test-only';
+  globalThis.fetch = async url => {
+    const u = new URL(url);
+    if (u.pathname === '/fixtures') return json([fixture]);
+    return u.searchParams.get('page') === '1' ? json([oddsEntry(123)], { paging: { total: 2 } }) : json([], { errors: { requests: 'quota' } });
+  };
+  const [match] = await data.fetchTodayMatches();
+  assert.equal(match.odds.win, 0);
+  assert.equal(match.oddsUnavailableReason, 'FETCH_FAILED');
+});
+test('successful zero-page odds response means not provided rather than failure', async () => {
+  process.env.APIFOOTBALL_KEY = 'test-only';
+  globalThis.fetch = async url => new URL(url).pathname === '/fixtures' ? json([fixture]) : json([], { paging: { total: 0 } });
+  const [match] = await data.fetchTodayMatches();
+  assert.equal(match.oddsUnavailableReason, 'NOT_PROVIDED');
+});
+test('preferred bookmaker without valid winner prices falls back to a valid source', async () => {
+  process.env.APIFOOTBALL_KEY = 'test-only';
+  const item = oddsEntry(123, 'Other provider');
+  item.bookmakers.unshift({ name: 'Bet365', bets: [] });
+  globalThis.fetch = async url => new URL(url).pathname === '/fixtures' ? json([fixture]) : json([item]);
+  const [match] = await data.fetchTodayMatches();
+  assert.equal(match.bookmaker, 'Other provider');
+  assert.equal(match.odds.win, 2.5);
+});

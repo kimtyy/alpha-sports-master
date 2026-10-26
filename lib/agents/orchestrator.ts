@@ -29,6 +29,7 @@ export interface MatchData {
   dataSource?: string;
   fetchedAt?: string;
   oddsStatus?: 'AVAILABLE' | 'UNAVAILABLE';
+  oddsUnavailableReason?: 'FETCH_FAILED' | 'NOT_PROVIDED';
   bookmaker?: string;
   elo?: { home: number; away: number };
   injuries?: { home: string[]; away: string[] };

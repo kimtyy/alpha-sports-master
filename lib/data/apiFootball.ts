@@ -50,27 +50,40 @@ export async function fetchTodayMatches(): Promise<MatchData[]> {
   if (!fixtures.length) return [];
 
   const oddsMap = new Map<number, { odds: MatchData['odds']; bookmaker: string }>();
-  try {
-    // Read every page before accepting any odds, avoiding silent partial coverage.
-    const collected = [];
-    for (const date of new Set(fixtures.map(item => koreanDate(new Date(item.fixture.date))))) {
-    let total = 1;
-    for (let page = 1; page <= total; page++) {
-      const json = await request(`/odds?date=${date}&timezone=Asia%2FSeoul&page=${page}`, apiKey);
-      total = Number(json.paging?.total ?? 1);
-      if (!Number.isInteger(total) || total < 1 || total > 50) throw new Error('Invalid pagination');
-      collected.push(...json.response);
+  const failedOddsDates = new Set<string>();
+  for (const date of new Set(fixtures.map(item => koreanDate(new Date(item.fixture.date))))) {
+    try {
+      // Publish a date only after every page succeeds. A failed date must not
+      // erase verified prices from other dates or expose partial page coverage.
+      const collected = [];
+      let total = 1;
+      for (let page = 1; page <= total; page++) {
+        const json = await request(`/odds?date=${date}&timezone=Asia%2FSeoul&page=${page}`, apiKey);
+        total = Number(json.paging?.total ?? 1);
+        if (!Number.isInteger(total) || total < 0 || total > 50 ||
+            (total === 0 && (page !== 1 || json.response.length > 0)) ||
+            (total > 0 && total < page)) throw new Error('Invalid pagination');
+        collected.push(...json.response);
+      }
+      const dateOdds = new Map<number, { odds: MatchData['odds']; bookmaker: string }>();
+      for (const item of collected) {
+        const bookmakers = Array.isArray(item.bookmakers) ? item.bookmakers : [];
+        const ordered = [...bookmakers.filter((b: any) => b.name === 'Bet365'),
+          ...bookmakers.filter((b: any) => b.name !== 'Bet365')];
+        for (const bookmaker of ordered) {
+          const bet = bookmaker.bets?.find((b: any) => b.name === 'Match Winner');
+          const odds = bet && Array.isArray(bet.values) ? parseOdds(bet.values) : null;
+          if (odds && item.fixture?.id && bookmaker.name) {
+            dateOdds.set(item.fixture.id, { odds, bookmaker: bookmaker.name });
+            break;
+          }
+        }
+      }
+      for (const [id, value] of dateOdds) oddsMap.set(id, value);
+    } catch {
+      failedOddsDates.add(date);
+      console.warn('Odds retrieval failed for date', date);
     }
-    }
-    for (const item of collected) {
-      const bookmakers = item.bookmakers || [];
-      const bookmaker = bookmakers.find((b: any) => b.name === 'Bet365') || bookmakers[0];
-      const bet = bookmaker?.bets?.find((b: any) => b.name === 'Match Winner');
-      const odds = bet && Array.isArray(bet.values) ? parseOdds(bet.values) : null;
-      if (odds) oddsMap.set(item.fixture.id, { odds, bookmaker: bookmaker.name });
-    }
-  } catch {
-    oddsMap.clear(); // Fixture information remains available, odds explicitly unavailable.
   }
 
   return fixtures.map((item: any) => {
@@ -95,6 +108,7 @@ export async function fetchTodayMatches(): Promise<MatchData[]> {
       // Zero is a compatibility sentinel, never a usable decimal price or model input.
       odds: found?.odds || { win: 0, draw: 0, loss: 0 },
       oddsStatus: found ? 'AVAILABLE' : 'UNAVAILABLE',
+      oddsUnavailableReason: found ? undefined : failedOddsDates.has(koreanDate(new Date(item.fixture.date))) ? 'FETCH_FAILED' : 'NOT_PROVIDED',
       bookmaker: found?.bookmaker,
     };
   });

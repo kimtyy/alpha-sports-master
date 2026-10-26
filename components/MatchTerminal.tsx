@@ -501,6 +501,12 @@ export const MatchTerminal: React.FC = () => {
               )}
             </div>
 
+            {matches.some(match => match.oddsUnavailableReason === 'FETCH_FAILED') && (
+              <div role="status" style={{ padding: '12px 16px', color: '#e2c48d', fontSize: 13 }}>
+                일부 날짜의 배당을 가져오지 못했습니다. 정상 조회된 배당은 표시됩니다.
+                <button onClick={() => window.location.reload()} style={{ marginLeft: 8, color: 'inherit', background: 'transparent', border: '1px solid currentColor', borderRadius: 6, padding: '4px 8px', cursor: 'pointer' }}>다시 조회</button>
+              </div>
+            )}
             <div className="match-cards-list">
               {groupedMatches.length > 0 ? (
                 groupedMatches.map(group => (
@@ -562,7 +568,7 @@ export const MatchTerminal: React.FC = () => {
                                   <span className="odds-box">패 {match.odds.loss}</span>
                                 </>
                               ) : (
-                                <span className="odds-box" style={{ flex: 1, textAlign: 'center', background: 'rgba(255,255,255,0.03)', color: '#888' }}>배당 정보 없음</span>
+                                <span className="odds-box" style={{ flex: 1, textAlign: 'center', background: 'rgba(255,255,255,0.03)', color: '#888' }}>{match.oddsUnavailableReason === 'FETCH_FAILED' ? '배당 조회 실패' : '제공된 배당 없음'}</span>
                               )}
                             </div>
                             {match.kellyResult && match.odds.win > 0 && (
