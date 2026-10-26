@@ -1,5 +1,6 @@
 "use client";
 
+import EvaluationPanel from './EvaluationPanel';
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -595,6 +596,7 @@ export const MatchTerminal: React.FC = () => {
 
         {activeTab === 'analysis' && (
           <div className="analysis-view-wrapper">
+            <EvaluationPanel />
             <div className="details-card-container">
               <h2 className="analysis-teams-title">{selectedMatch.id ? `${selectedMatch.teams.home} vs ${selectedMatch.teams.away}` : '선택된 경기가 없습니다'}</h2>
               <div className="recommendation-banner skip">
