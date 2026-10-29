@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import ModelEvaluationPanel from './ModelEvaluationPanel';
 import { marketProbabilities } from '@/lib/evaluation';
 
 export default function EvaluationPanel() {
@@ -12,7 +13,7 @@ export default function EvaluationPanel() {
       .then(setReport).catch(e => { if (e.name !== 'AbortError') setError(true); });
     return () => controller.abort();
   }, []);
-  return <section style={{padding:20, border:'1px solid #34404a', borderRadius:12, marginTop:20}}>
+  return <><ModelEvaluationPanel/><section style={{padding:20, border:'1px solid #34404a', borderRadius:12, marginTop:20}}>
     <h3>배당 기준선 검증 기록</h3>
     <p style={{fontSize:13,color:'#b9c7d5'}}>AI 예측이나 구매 추천이 아닙니다. 해외 배당의 역수를 합계 100%로 환산한 비교 기준입니다.</p>
     {error ? <p role="alert">평가 기록을 불러오지 못했습니다. 잠시 후 다시 확인해주세요.</p> : !report ? <p>평가 기록 확인 중…</p> : <>
@@ -32,5 +33,5 @@ export default function EvaluationPanel() {
       })}
       <p style={{fontSize:12,color:'#b9c7d5'}}>최초 수집 배당을 고정합니다. 수집 시점은 경기마다 다르며 취소·연장전·경기 시간 변경은 평가에서 제외합니다. 최근 기록 최대 20건을 표시합니다.</p>
     </>}
-  </section>;
+  </section></>;
 }
