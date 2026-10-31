@@ -7,6 +7,13 @@ begin
   values(r,'poisson-venue-v1','run','RUN_STARTED');
   select count(*) into n from public.model_capture_events where run_id=r;
   if n<>1 then raise exception 'AUDIT_READ_FAILED';end if;
+  insert into public.model_capture_events(run_id,model_version,status,reason,failure_code,failure_date,failure_page,failure_http_status)
+  values(r,'poisson-venue-v1','skipped','ODDS_FETCH_FAILED','HTTP_ERROR','2026-11-01',2,503);
+  begin
+    insert into public.model_capture_events(run_id,model_version,status,reason,failure_code,failure_date,failure_page)
+    values(r,'poisson-venue-v1','skipped','ODDS_FETCH_FAILED','arbitrary secret text','2026-11-01',1);
+    raise exception 'UNKNOWN_DIAGNOSTIC_ACCEPTED';
+  exception when check_violation then null;end;
   begin
     update public.model_capture_events set reason='RUN_COMPLETED' where run_id=r;
     raise exception 'UPDATE_NOT_BLOCKED';

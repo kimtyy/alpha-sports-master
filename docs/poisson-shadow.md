@@ -43,3 +43,7 @@ Only identifiers, a fixed model version, server timestamps and allowlisted statu
 An upstream match-fetch/baseline failure records MATCHES_UNAVAILABLE as a run-level failure; no claim is made about individual fixtures which were never received. A scheduled process that never invokes this endpoint has no audit row. Audit retention currently has no automatic deletion.
 
 These records start at deployment and cannot explain the earlier 42 absent model records retrospectively. They cover the fixtures actually returned by the configured adapter, not all global fixtures. Result settlement remains in market_baseline_records and is joined by fixture_id for model evaluation; model_predictions is never rewritten.
+
+### Odds failure diagnostics
+
+New ODDS_FETCH_FAILED events may include failure_code, failure_date (Korean fixture/odds request date), failure_page and optional failure_http_status. Codes separate HTTP failures, 429/provider quota keys, provider rejection, invalid response, timeout, network error, the existing >50-page safety limit, and invalid pagination. They never store raw error text, URLs, headers or API keys. A date is still published only when all pages succeed; diagnostics do not relax that rule or retry requests automatically. Other dates remain usable. Older events have NULL diagnostics and their exact cause cannot be recovered retrospectively. Provider quota classification covers known requests/rateLimit keys; other HTTP-200 provider errors stay generic PROVIDER_ERROR.

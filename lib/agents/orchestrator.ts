@@ -30,6 +30,7 @@ export interface MatchData {
   fetchedAt?: string;
   oddsStatus?: 'AVAILABLE' | 'UNAVAILABLE';
   oddsUnavailableReason?: 'FETCH_FAILED' | 'NOT_PROVIDED';
+  oddsFailure?: { code: 'HTTP_ERROR' | 'RATE_LIMIT' | 'PROVIDER_ERROR' | 'INVALID_RESPONSE' | 'TIMEOUT' | 'NETWORK_ERROR' | 'PAGE_LIMIT' | 'INVALID_PAGINATION'; date: string; page: number; httpStatus?: number };
   bookmaker?: string;
   elo?: { home: number; away: number };
   injuries?: { home: string[]; away: string[] };

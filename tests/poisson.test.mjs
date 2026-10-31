@@ -115,3 +115,9 @@ test('empty input completes an auditable zero-match run and ledger read failure 
  db.from=t=>t==='model_predictions'?{select(){return {eq(){return {in:async()=>({error:{code:'42501'}})}}}}}:original(t);
  const result=await capturePoisson(db,[match],async()=>history);assert.equal(result.failed,1);assert.equal(db.events[1].reason,'MODEL_LEDGER_UNAVAILABLE');assert.equal(db.writes.length,0);
 });
+test('per-fixture audit preserves safe odds diagnostics and discards extra provider fields',async()=>{
+ const db=mockDB();await capturePoisson(db,[{...match,oddsStatus:'UNAVAILABLE',oddsUnavailableReason:'FETCH_FAILED',
+ oddsFailure:{code:'PAGE_LIMIT',date:'2026-11-01',page:1,raw:'secret-not-to-store'}}],async()=>history);
+ const e=db.events[1];assert.equal(e.reason,'ODDS_FETCH_FAILED');assert.equal(e.failure_code,'PAGE_LIMIT');
+ assert.equal(e.failure_date,'2026-11-01');assert.equal(e.failure_page,1);assert.ok(!JSON.stringify(db.events).includes('secret-not-to-store'));
+});

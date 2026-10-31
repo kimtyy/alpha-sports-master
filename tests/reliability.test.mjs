@@ -188,3 +188,41 @@ test('preferred bookmaker without valid winner prices falls back to a valid sour
   assert.equal(match.bookmaker, 'Other provider');
   assert.equal(match.odds.win, 2.5);
 });
+
+test('odds diagnostics distinguish HTTP, quota, timeout, response and pagination failures without storing secrets', async()=>{
+ process.env.APIFOOTBALL_KEY='test-only';
+ const secret='DO_NOT_PERSIST_TOKEN';
+ const cases=[
+  [()=>new Response('',{status:429}),'RATE_LIMIT',429],
+  [()=>new Response('',{status:503}),'HTTP_ERROR',503],
+  [()=>json([],{errors:{requests:secret}}),'RATE_LIMIT',undefined],
+  [()=>json([],{errors:{access:secret}}),'PROVIDER_ERROR',undefined],
+  [()=>new Response(secret),'INVALID_RESPONSE',undefined],
+  [()=>{throw new DOMException(secret,'TimeoutError')},'TIMEOUT',undefined],
+  [()=>{throw new Error(secret)},'NETWORK_ERROR',undefined],
+  [()=>json([oddsEntry(123)],{paging:{total:51}}),'PAGE_LIMIT',undefined],
+  [()=>json([oddsEntry(123)],{paging:{total:-1}}),'INVALID_PAGINATION',undefined],
+ ];
+ const originalWarn=console.warn;const warnings=[];console.warn=(...args)=>warnings.push(args.join(' '));
+ try{
+  for(const [failure,code,status] of cases){
+   globalThis.fetch=async url=>new URL(url).pathname==='/fixtures'?json([fixture]):failure();
+   const [m]=await data.fetchTodayMatches();
+   assert.equal(m.oddsUnavailableReason,'FETCH_FAILED');assert.equal(m.oddsFailure.code,code);
+   assert.equal(m.oddsFailure.page,1);assert.equal(m.oddsFailure.date,'2026-10-25');assert.equal(m.oddsFailure.httpStatus,status);
+   assert.ok(!JSON.stringify(m).includes(secret));
+  }
+  assert.ok(!JSON.stringify(warnings).includes(secret));
+ }finally{console.warn=originalWarn;}
+});
+test('later odds page failure retains its page number and successful fixtures have no diagnostic',async()=>{
+ process.env.APIFOOTBALL_KEY='test-only';
+ globalThis.fetch=async url=>{
+  const u=new URL(url);
+  if(u.pathname==='/fixtures')return json([fixture]);
+  return u.searchParams.get('page')==='1'?json([oddsEntry(123)],{paging:{total:2}}):new Response('',{status:502});
+ };
+ const [failed]=await data.fetchTodayMatches();assert.equal(failed.oddsFailure.page,2);assert.equal(failed.odds.win,0);
+ globalThis.fetch=async url=>new URL(url).pathname==='/fixtures'?json([fixture]):json([oddsEntry(123)]);
+ const [ok]=await data.fetchTodayMatches();assert.equal(ok.oddsFailure,undefined);
+});

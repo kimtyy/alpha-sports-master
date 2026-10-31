@@ -21,7 +21,12 @@ export async function capturePoisson(db:any,matches:MatchData[],getHistory:(leag
   const event=(match:MatchData,status:string,reason:string)=>events.push({run_id:runId,model_version:MODEL_VERSION,
     fixture_id:Number.isSafeInteger(match.rawIds?.fixtureId)&&match.rawIds!.fixtureId!>0?match.rawIds!.fixtureId:null,
     league_id:Number.isSafeInteger(match.rawIds?.leagueId)?match.rawIds!.leagueId:null,
-    status,reason});
+    status,reason,
+    // Copy only allowlisted scalar diagnostics, never arbitrary provider payloads.
+    failure_code:reason==='ODDS_FETCH_FAILED'?match.oddsFailure?.code:null,
+    failure_date:reason==='ODDS_FETCH_FAILED'?match.oddsFailure?.date:null,
+    failure_page:reason==='ODDS_FETCH_FAILED'?match.oddsFailure?.page:null,
+    failure_http_status:reason==='ODDS_FETCH_FAILED'?match.oddsFailure?.httpStatus:null});
   const persist=async(rows:any[])=>{
     try{const {error}=await db.from('model_capture_events').insert(rows);if(error)throw new Error();return true;}
     catch{stats.auditFailed++;return false;}
