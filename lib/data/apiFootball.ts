@@ -67,17 +67,32 @@ export async function fetchTodayMatches(): Promise<MatchData[]> {
     try {
       // Publish a date only after every page succeeds. A failed date must not
       // erase verified prices from other dates or expose partial page coverage.
-      const collected = [];
-      let total = 1;
-      for (let page = 1; page <= total; page++) {
-        requestedPage=page;
-        const json = await request(`/odds?date=${date}&timezone=Asia%2FSeoul&page=${page}`, apiKey);
-        total = Number(json.paging?.total ?? 1);
-        if (Number.isInteger(total) && total>50) throw new ProviderFailure('PAGE_LIMIT');
-        if (!Number.isInteger(total) || total < 0 ||
-            (total === 0 && (page !== 1 || json.response.length > 0)) ||
-            (total > 0 && total < page)) throw new ProviderFailure('INVALID_PAGINATION');
-        collected.push(...json.response);
+      const loadPages=async(scope='')=>{
+        const rows:any[]=[];let total=1;
+        for(let page=1;page<=total;page++){
+          requestedPage=page;
+          const json=await request(`/odds?date=${date}&timezone=Asia%2FSeoul&page=${page}${scope}`,apiKey);
+          total=Number(json.paging?.total??1);
+          if(Number.isInteger(total)&&total>50)throw new ProviderFailure('PAGE_LIMIT');
+          if(!Number.isInteger(total)||total<0||(total===0&&(page!==1||json.response.length>0))||
+            (total>0&&total<page))throw new ProviderFailure('INVALID_PAGINATION');
+          rows.push(...json.response);
+        }
+        return rows;
+      };
+      let collected:any[];
+      try{collected=await loadPages();}
+      catch(error){
+        if(!(error instanceof ProviderFailure)||error.code!=='PAGE_LIMIT')throw error;
+        const scopedFixtures=fixtures.filter(item=>koreanDate(new Date(item.fixture.date))===date);
+        if(!scopedFixtures.every(item=>Number.isSafeInteger(item.league?.id)&&item.league.id>0&&
+          Number.isSafeInteger(item.league?.season)&&item.league.season>0))throw error;
+        const scopes=new Map<string,{id:number,season:number}>();
+        for(const item of scopedFixtures)scopes.set(`${item.league.id}:${item.league.season}`,item.league);
+        collected=[];
+        // Bound each league query too. Publish the date only when all selected scopes complete.
+        for(const scope of scopes.values())collected.push(...await loadPages(`&league=${scope.id}&season=${scope.season}`));
+        console.info('ODDS_DATE_SCOPED',JSON.stringify({date,leagues:scopes.size}));
       }
       const dateOdds = new Map<number, { odds: MatchData['odds']; bookmaker: string }>();
       for (const item of collected) {

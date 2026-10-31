@@ -226,3 +226,32 @@ test('later odds page failure retains its page number and successful fixtures ha
  globalThis.fetch=async url=>new URL(url).pathname==='/fixtures'?json([fixture]):json([oddsEntry(123)]);
  const [ok]=await data.fetchTodayMatches();assert.equal(ok.oddsFailure,undefined);
 });
+test('global odds page limit falls back to complete configured league-season queries',async()=>{
+ process.env.APIFOOTBALL_KEY='test-only';const calls=[];
+ const f={...fixture,league:{...fixture.league,season:2026}};
+ globalThis.fetch=async url=>{
+  const u=new URL(url);calls.push(u);
+  if(u.pathname==='/fixtures')return json([f]);
+  if(!u.searchParams.has('league'))return json([],{paging:{total:51}});
+  assert.equal(u.searchParams.get('league'),'292');assert.equal(u.searchParams.get('season'),'2026');
+  return json([oddsEntry(123)],{paging:{total:1}});
+ };
+ const [m]=await data.fetchTodayMatches();assert.equal(m.odds.win,2.5);assert.equal(m.oddsFailure,undefined);
+ assert.equal(calls.filter(u=>u.pathname==='/odds').length,2);
+});
+test('failed or oversized scoped odds never exposes partial date prices',async()=>{
+ process.env.APIFOOTBALL_KEY='test-only';
+ const f={...fixture,league:{...fixture.league,season:2026}};
+ const second={...f,fixture:{...f.fixture,id:456},league:{id:293,name:'K League 2',season:2026}};
+ for(const oversized of [false,true]){
+ globalThis.fetch=async url=>{
+  const u=new URL(url);if(u.pathname==='/fixtures')return json([f,second]);
+  const league=u.searchParams.get('league');
+  if(!league)return json([],{paging:{total:51}});
+  if(league==='292')return json([oddsEntry(123)],{paging:{total:1}});
+  return oversized?json([],{paging:{total:51}}):new Response('',{status:503});
+ };
+ const rows=await data.fetchTodayMatches();assert.ok(rows.every(m=>m.odds.win===0&&m.oddsUnavailableReason==='FETCH_FAILED'));
+ assert.ok(rows.every(m=>m.oddsFailure.code===(oversized?'PAGE_LIMIT':'HTTP_ERROR')));
+ }
+});
