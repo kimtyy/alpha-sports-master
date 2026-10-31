@@ -14,7 +14,7 @@ Version: `poisson-venue-v1`. Research only; match-card recommendations and Elo u
 
 ## Prospective collection and fair comparison
 
-Daily authenticated cron first runs existing settlement and market collection, then a bounded research capture (60 seconds, subject to the route's remaining time budget). Only fixtures in the next 48 hours with fresh valid odds and >5 minutes before kickoff are eligible; at most 30 previously unrecorded candidates are attempted per run, earliest first. League-season histories are fetched once per run. Skips/errors/deferred counts go to the authenticated cron response and runtime log. These limits mean the sample is not comprehensive or random.
+Daily authenticated cron first runs existing settlement and market collection, then a bounded research capture (60 seconds, subject to the route's remaining time budget). Only fixtures in the next 48 hours with fresh valid odds and >5 minutes before kickoff are eligible; at most 30 previously unrecorded candidates are attempted per run, earliest first. League-season histories are fetched once per run. Skips/errors/deferred counts go to the authenticated cron response and runtime log, with per-fixture reasons persisted in the server-only audit table described below. These limits mean the sample is not comprehensive or random.
 
 A prediction links to a baseline fixture for shared result/exclusion handling, but records its own contemporaneous price snapshot. It must not use the older first-captured baseline odds for the paired comparison. History and odds can be observed at slightly different times, both no more than 15 minutes before database insertion. This is approximately contemporaneous, not a guaranteed identical market tick.
 
@@ -30,3 +30,16 @@ The ledger freezes probabilities, model version, inputs (compact full training f
 `supabase/tests/poisson_permissions.sql` is a transaction-scoped probe: run after schema; the script wraps its checks in BEGIN/ROLLBACK. It uses a future baseline fixture and synthetic evidence which must never be committed.
 
 Live collection remains unverified until a scheduled authenticated cron run creates records. Check history provider access and skipped reasons on that run. Do not describe a deployed empty ledger as a successful real prediction capture. No historical test fixture is inserted into production performance data.
+
+## Collection audit
+
+`model_capture_events` is a separate append-only, RLS-enabled operational ledger.
+Only service_role can select/insert; browser roles have no privileges or policies, and service_role cannot update/delete.
+Each invocation has a random run UUID. RUN_STARTED must persist before prediction work begins; if it fails, no predictions are attempted and auditFailed is nonzero.
+Every fixture returned by the provider adapter gets an outcome, including unsupported leagues, outside-48h fixtures, unavailable odds, history failure, invalid inputs, insufficient history, prior/concurrent duplicates, prediction write failure, and time/30-attempt deferrals.
+A final atomic bulk insert includes those outcomes and RUN_COMPLETED. Failure increments auditFailed, causes cron success=false/HTTP 502, and leaves the run incomplete. Predictions already saved remain immutable; a later run can report them as duplicates. A process termination may leave only RUN_STARTED, which must not be interpreted as a complete audit. The two ledgers are deliberately not an atomic transaction.
+
+Only identifiers, a fixed model version, server timestamps and allowlisted status/reason codes are stored; raw exceptions, request headers, provider payloads and credentials are never stored. Codes distinguish ODDS_FETCH_FAILED from ODDS_UNAVAILABLE and ATTEMPT_LIMIT from TIME_BUDGET. History provider failures use HISTORY_UNAVAILABLE without storing upstream error text.
+An upstream match-fetch/baseline failure records MATCHES_UNAVAILABLE as a run-level failure; no claim is made about individual fixtures which were never received. A scheduled process that never invokes this endpoint has no audit row. Audit retention currently has no automatic deletion.
+
+These records start at deployment and cannot explain the earlier 42 absent model records retrospectively. They cover the fixtures actually returned by the configured adapter, not all global fixtures. Result settlement remains in market_baseline_records and is joined by fixture_id for model evaluation; model_predictions is never rewritten.

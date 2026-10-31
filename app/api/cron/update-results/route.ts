@@ -1,8 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { settlePending } from '@/lib/settlement';
 import { captureBaseline, settleBaseline } from '@/lib/evaluation';
 import { fetchTodayMatches } from '@/lib/data';
+import { MODEL_VERSION } from '@/lib/poisson';
 import { capturePoisson, fetchLeagueHistory } from '@/lib/poisson-capture';
 
 export const dynamic = 'force-dynamic';
@@ -40,15 +42,24 @@ export async function GET(req: NextRequest) {
     try {
       const matches = await fetchTodayMatches();
       capture = await captureBaseline(db, matches);
-      if (Date.now() < startedAt + 230000) {
-        try {
-          modelCapture = await capturePoisson(db, matches,
-            (league,season)=>fetchLeagueHistory(league,season,key), Math.min(startedAt+270000,Date.now()+60000));
-        } catch { modelCapture={status:'unavailable',failed:1}; }
-      } else { modelCapture={status:'deferred_time_budget',failed:0}; }
+      // Even when the model budget is exhausted, persist each received fixture's deferral.
+      const modelDeadline = Date.now() < startedAt + 230000
+        ? Math.min(startedAt + 270000, Date.now() + 60000) : Date.now();
+      try {
+        modelCapture = await capturePoisson(db, matches,
+          (league,season)=>fetchLeagueHistory(league,season,key), modelDeadline);
+      } catch { modelCapture={status:'unavailable',failed:1,auditFailed:1}; }
     }
-    catch { capture = { failed: 1, error: "BASELINE_CAPTURE_UNAVAILABLE" }; }
-    const success = result.failed === 0 && evaluation.failed === 0 && capture.failed === 0 && modelCapture.failed === 0;
+    catch {
+      capture = { failed: 1, error: "BASELINE_CAPTURE_UNAVAILABLE" };
+      let auditFailed=0;
+      try {
+        const {error}=await db.from('model_capture_events').insert({run_id:randomUUID(),model_version:MODEL_VERSION,status:'run',reason:'MATCHES_UNAVAILABLE'});
+        if(error)auditFailed=1;
+      }catch{auditFailed=1;}
+      modelCapture={status:'unavailable',failed:1,auditFailed};
+    }
+    const success = result.failed === 0 && evaluation.failed === 0 && capture.failed === 0 && modelCapture.failed === 0 && modelCapture.auditFailed === 0;
     console.info("RESULT_EVALUATION_RUN", JSON.stringify({ success, bookmarks: result, evaluation, capture, modelCapture }));
     return NextResponse.json({ success, ...result, evaluation, capture, modelCapture }, { status: success ? 200 : 502 });
   } catch {

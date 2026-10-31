@@ -5,7 +5,7 @@ import ts from 'typescript';
 const files=['../lib/evaluation.ts','../lib/poisson.ts','../lib/poisson-capture.ts'];
 const source=files.map(p=>readFileSync(new URL(p,import.meta.url),'utf8').replace(/^import .*;\n/gm,'')).join('\n');
 const {outputText}=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}});
-const {predictPoisson,trainingMatches,poissonProbabilities,pairedMetrics,capturePoisson,fetchLeagueHistory}=await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
+const {predictPoisson,trainingMatches,poissonProbabilities,pairedMetrics,capturePoisson,fetchLeagueHistory}=await import(`data:text/javascript;base64,${Buffer.from("import { randomUUID } from 'node:crypto';\n"+outputText).toString('base64')}`);
 const now=Date.now(),observed=new Date(now).toISOString();
 const target={id:9999,home:10,away:20,league:39,season:2026,kickoff:new Date(now+86400000).toISOString()};
 const fixture=(i,patch={})=>({fixture:{id:i+1,date:new Date(now-(i+1)*86400000).toISOString(),status:{short:'FT'}},league:{id:39,season:2026},teams:{home:{id:i<6?10:30+i},away:{id:i<6?20:80+i}},goals:{home:2,away:1},...patch});
@@ -46,7 +46,7 @@ test('ties are disclosed and excluded only from their own accuracy denominator',
  assert.equal(m.model.tied,1);assert.equal(m.model.accuracy,null);assert.equal(m.market.accuracy,1);assert.equal(m.settled,1);
 });
 const match={id:String(target.id),rawIds:{fixtureId:target.id,homeTeamId:10,awayTeamId:20,leagueId:39,season:2026},fixtureStatus:'NS',oddsStatus:'AVAILABLE',bookmaker:'Example',teams:{home:'A',away:'B'},league:'Premier League',startTime:target.kickoff,fetchedAt:observed,odds:{win:2,draw:4,loss:4}};
-const mockDB=(saveError=null,existing=[])=>{const writes=[];return {writes,from(){return {select(){return {eq(){return {in:async()=>({data:existing,error:null})}}}},insert:async row=>{writes.push(row);return {error:saveError}}}}}};
+const mockDB=(saveError=null,existing=[])=>{const writes=[],events=[];return {writes,events,from(table){if(table==='model_capture_events')return {insert:async rows=>{events.push(...rows);return {error:null}}};return {select(){return {eq(){return {in:async()=>({data:existing,error:null})}}}},insert:async row=>{writes.push(row);return {error:saveError}}}}}};
 test('capture freezes model inputs and paired odds, duplicates never overwrite',async()=>{
  const db=mockDB();const result=await capturePoisson(db,[match],async()=>history);
  assert.equal(result.inserted,1);assert.equal(db.writes[0].evidence.history.length,40);assert.equal(db.writes[0].odds_home,2);
@@ -72,4 +72,46 @@ test('history HTTP and provider errors, truncated pages and malformed bodies fai
   globalThis.fetch=async()=>({ok:false});await assert.rejects(()=>fetchLeagueHistory(39,2026,'test'));
   globalThis.fetch=async()=>({ok:true,json:async()=>({response:history,results:40,paging:{current:1,total:1}})});assert.equal((await fetchLeagueHistory(39,2026,'test')).length,40);
  }finally{globalThis.fetch=original;}
+});
+
+test('audit accounts for every input including filtered fixtures without retaining raw data',async()=>{
+ const db=mockDB();
+ const cases=[match,{...match,id:'cup',rawIds:{...match.rawIds,leagueId:2}},
+  {...match,id:'far',startTime:new Date(now+72*3600000).toISOString()},
+  {...match,id:'no-odds',oddsStatus:'UNAVAILABLE',oddsUnavailableReason:'NOT_PROVIDED'},
+  {...match,id:'failed-odds',oddsStatus:'UNAVAILABLE',oddsUnavailableReason:'FETCH_FAILED'}];
+ const result=await capturePoisson(db,cases,async()=>history);
+ assert.equal(result.auditFailed,0);assert.equal(db.events.length,cases.length+2);
+ assert.deepEqual(db.events.map(e=>e.reason),['RUN_STARTED','UNSUPPORTED_LEAGUE','OUTSIDE_HORIZON','ODDS_UNAVAILABLE','ODDS_FETCH_FAILED','PREDICTION_SAVED','RUN_COMPLETED']);
+ assert.ok(db.events.every(e=>e.run_id===result.runId));
+ assert.ok(db.events.every(e=>!('evidence' in e)&&!('error' in e)&&!('bookmaker' in e)));
+});
+test('audit distinguishes duplicates, both limits, history failure and prediction failure',async()=>{
+ const db=mockDB();await capturePoisson(db,Array.from({length:31},(_,i)=>({...match,id:String(i),rawIds:{...match.rawIds,fixtureId:20000+i}})),async()=>history);
+ assert.equal(db.events.filter(e=>e.reason==='PREDICTION_SAVED').length,30);
+ assert.equal(db.events.filter(e=>e.reason==='ATTEMPT_LIMIT').length,1);
+ const timed=mockDB();await capturePoisson(timed,[match],async()=>history,0);assert.equal(timed.events[1].reason,'TIME_BUDGET');
+ const failed=mockDB();await capturePoisson(failed,[match],async()=>{throw new Error('secret-token=must-not-store')});
+ assert.equal(failed.events[1].reason,'HISTORY_UNAVAILABLE');assert.ok(!JSON.stringify(failed.events).includes('secret-token'));
+ const write=mockDB({code:'42501'});await capturePoisson(write,[match],async()=>history);assert.equal(write.events[1].reason,'PREDICTION_WRITE_FAILED');
+ const race=mockDB({code:'23505'});await capturePoisson(race,[match],async()=>history);assert.equal(race.events[1].reason,'CONCURRENT_DUPLICATE');
+ const dup=mockDB(null,[{fixture_id:target.id}]);await capturePoisson(dup,[match],async()=>history);assert.equal(dup.events[1].reason,'ALREADY_RECORDED');
+});
+test('audit failure before capture prevents predictions; failure after capture remains visible and incomplete',async()=>{
+ for(const failAt of [1,2]){
+  const db=mockDB();const original=db.from.bind(db);let calls=0;
+  db.from=table=>table==='model_capture_events'?{insert:async rows=>{
+    calls++;if(calls===failAt)return {error:{message:'credential must not leak'}};
+    db.events.push(...rows);return {error:null};
+  }}:original(table);
+  const result=await capturePoisson(db,[match],async()=>history);
+  assert.equal(result.auditFailed,1);assert.equal(result.inserted,failAt===1?0:1);
+  assert.ok(!db.events.some(e=>e.reason==='RUN_COMPLETED'));
+ }
+});
+test('empty input completes an auditable zero-match run and ledger read failure has per-fixture failures',async()=>{
+ const empty=mockDB();await capturePoisson(empty,[],async()=>history);assert.deepEqual(empty.events.map(e=>e.reason),['RUN_STARTED','RUN_COMPLETED']);
+ const db=mockDB();const original=db.from.bind(db);
+ db.from=t=>t==='model_predictions'?{select(){return {eq(){return {in:async()=>({error:{code:'42501'}})}}}}}:original(t);
+ const result=await capturePoisson(db,[match],async()=>history);assert.equal(result.failed,1);assert.equal(db.events[1].reason,'MODEL_LEDGER_UNAVAILABLE');assert.equal(db.writes.length,0);
 });

@@ -4,7 +4,7 @@ set local role service_role;
 do $$
 declare f public.market_baseline_records; e jsonb; t timestamptz:=clock_timestamp(); n integer;
 begin
-  select * into f from public.market_baseline_records where kickoff_at>clock_timestamp()+interval '1 day' and settled_at is null and excluded_reason is null order by kickoff_at limit 1;
+  select * into f from public.market_baseline_records b where not exists(select 1 from public.model_predictions m where m.fixture_id=b.fixture_id) and kickoff_at>clock_timestamp()+interval '1 day' and settled_at is null and excluded_reason is null order by kickoff_at limit 1;
   if not found then raise exception 'NO_TEST_TARGET'; end if;
   select jsonb_build_object('observedAt',t,'homeMatches',6,'awayMatches',6,'history',jsonb_agg(jsonb_build_object('id',-i,'kickoff',t-interval '10 days','home',1,'away',2,'hg',2,'ag',1))) into e from generate_series(1,30) i;
   insert into public.model_predictions(fixture_id,model_version,kickoff_at,observed_at,odds_observed_at,bookmaker,odds_home,odds_draw,odds_away,p_home,p_draw,p_away,lambda_home,lambda_away,evidence)
