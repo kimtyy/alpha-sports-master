@@ -1,0 +1,7 @@
+# K League schedule navigation
+
+The home screen starts with K League fixtures (API-Football league IDs 292 and 293). The scope buttons switch between K League, overseas/international competitions and all configured leagues. Options and counts are derived from the received schedule, not from model coverage. K League 1 and 2 have distinct labels and select values. Changing scope clears the individual league choice; team/league search composes with that choice. Home restores the default K League view; the empty-state action opens all leagues and clears search.
+
+Dates remain chronological in Korean time. In the all-leagues view, K League fixtures come before other fixtures within each date, with kickoff order inside each group. The filter never mutates the source records. Fixture status and odds availability describe observed provider data, not whether a research prediction was saved. No prediction probabilities, settlement results, collection priorities, DB permissions or API requests change in this feature. Research records remain under the analysis tab.
+
+Validation: npm test (47 tests including ID-based scope boundaries, K League 1/2 distinctions, Korean search, timezone sorting and unavailable odds); TypeScript and production build. Browser checks cover default scope, individual league selection, international/all, search with no results, recovery, detail navigation and layout overflow. Browser observations apply to the observed viewport and current provider response, not every handset or future schedule.

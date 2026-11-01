@@ -1,5 +1,6 @@
 "use client";
 
+import { LEAGUE_SCOPES, type LeagueScope, leagueLabel as getLeagueNameKorean, inLeagueScope, leagueOptions, filterMatches, compareMatchSchedule, fixtureStatusLabel, oddsAvailabilityMessage } from '@/lib/match-filters';
 import EvaluationPanel from './EvaluationPanel';
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -25,20 +26,6 @@ const getMatchSport = (matchId: string): 'soccer' | 'baseball' | 'basketball' | 
   if (matchId === 'm3') return 'baseball';
   if (matchId === 'm5') return 'basketball';
   return 'soccer';
-};
-
-const getLeagueNameKorean = (league: string, leagueId?: number): string => {
-  if (leagueId === 39) return 'EPL';
-  if (leagueId === 235) return '러시아 프리미어리그';
-  const l = league.toLowerCase();
-  if (l === 'epl' || l === 'english premier league') return 'EPL';
-  if (l.includes('la liga')) return '라리가';
-  if (l.includes('bundesliga')) return '분데스리가';
-  if (l.includes('k league')) return 'K리그';
-  if (l.includes('kbo')) return 'KBO';
-  if (l.includes('mlb')) return 'MLB';
-  if (l.includes('nba')) return 'NBA';
-  return league;
 };
 
 const EMPTY_MATCH: MatchData = { id: '', code: '', teams: { home: '', away: '' }, league: '', odds: { win: 0, draw: 0, loss: 0 }, startTime: '' };
@@ -74,7 +61,8 @@ export const MatchTerminal: React.FC = () => {
   
   // Navigation & Filtering States
   const [activeTab, setActiveTab] = useState<'home' | 'analysis' | 'strategy' | 'chat' | 'profile' | 'notifications'>('home');
-  const [selectedSport, setSelectedSport] = useState<string>('all');
+  const [leagueScope, setLeagueScope] = useState<LeagueScope>('kleague');
+  const [selectedLeague, setSelectedLeague] = useState('all');
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showOnlyValueBets, setShowOnlyValueBets] = useState<boolean>(false);
@@ -298,9 +286,6 @@ export const MatchTerminal: React.FC = () => {
           const dataList = json.data || [];
           const enriched = enrichMatches(dataList);
           setMatches(enriched);
-          if (enriched.length > 0) {
-            setSelectedMatch(enriched[0]);
-          }
         }
       } catch (error) {
         setDataError('경기 데이터를 가져올 수 없습니다. 잠시 후 다시 시도해주세요.');
@@ -315,7 +300,8 @@ export const MatchTerminal: React.FC = () => {
   // Reset helper for Global Home recovery
   const resetToHome = () => {
     setActiveTab('home');
-    setSelectedSport('all');
+    setLeagueScope('kleague');
+    setSelectedLeague('all');
     setSearchQuery('');
     setIsSearchOpen(false);
     setShowOnlyValueBets(false);
@@ -326,34 +312,17 @@ export const MatchTerminal: React.FC = () => {
   }, [matches]);
 
   const filteredMatches = useMemo(() => {
-    let result = matches;
-    
-    // 1. Sport category filtering
-    if (selectedSport !== 'all') {
-      result = result.filter(m => m.sport === selectedSport);
-    }
-    
-    // 2. Recommend only filter (Value Bet)
-    if (showOnlyValueBets) {
-      result = result.filter(m => m.kellyResult?.isValueBet);
-    }
-    
-    // 3. Search query filtering (home team, away team, league)
-    if (searchQuery.trim() !== '') {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(m => 
-        m.teams.home.toLowerCase().includes(q) ||
-        m.teams.away.toLowerCase().includes(q) ||
-        m.league.toLowerCase().includes(q)
-      );
-    }
-    
-    return result;
-  }, [matches, selectedSport, showOnlyValueBets, searchQuery]);
+    const result = filterMatches(matches, leagueScope, selectedLeague, searchQuery);
+    return showOnlyValueBets ? result.filter(m => m.kellyResult?.isValueBet) : result;
+  }, [matches, leagueScope, selectedLeague, showOnlyValueBets, searchQuery]);
+  const availableLeagues = useMemo(() => leagueOptions(matches, leagueScope), [matches, leagueScope]);
+  const showAllLeagues = () => {
+    setLeagueScope('all'); setSelectedLeague('all'); setSearchQuery(''); setShowOnlyValueBets(false);
+  };
 
   const groupedMatches = useMemo(() => {
     const sorted = [...filteredMatches].sort((a, b) => {
-      return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
+      return compareMatchSchedule(a,b);
     });
 
     const groups: { dateLabel: string; matches: MatchData[] }[] = [];
@@ -410,9 +379,9 @@ export const MatchTerminal: React.FC = () => {
       <div className="sticky-top-wrapper">
         {/* Row 1: App Header */}
         <header className="app-header">
-          <div className="header-logo" onClick={resetToHome}>
+          <button className="header-logo" aria-label="홈으로, K리그 일정 보기" onClick={resetToHome}>
             ALPHA <span>SPORTS</span>
-          </div>
+          </button>
           <div className="header-actions">
             <div 
               className={`bell-container ${activeTab === 'notifications' ? 'active' : ''}`}
@@ -421,14 +390,10 @@ export const MatchTerminal: React.FC = () => {
               <Bell size={22} className="bell-icon" />
               {notifications.length > 0 && <span className="bell-badge">{notifications.length}</span>}
             </div>
-            <Search 
-              size={22} 
-              className={`search-icon ${isSearchOpen ? 'active' : ''}`} 
-              onClick={() => {
-                setIsSearchOpen(!isSearchOpen);
-                if (isSearchOpen) setSearchQuery(''); // Clear query when closing
-              }}
-            />
+            <button className="search-toggle" aria-label="경기 검색" aria-expanded={isSearchOpen}
+              onClick={() => {setIsSearchOpen(!isSearchOpen);if(isSearchOpen)setSearchQuery('');}}>
+              <Search size={22} className={`search-icon ${isSearchOpen?'active':''}`} />
+            </button>
           </div>
         </header>
 
@@ -445,7 +410,8 @@ export const MatchTerminal: React.FC = () => {
                 <Search size={16} className="search-inner-icon" />
                 <input 
                   type="text" 
-                  placeholder="팀명 또는 리그명으로 전술 검색..."
+                  aria-label="팀명 또는 리그명 검색"
+                  placeholder="팀명 또는 리그명 검색"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="search-input-field"
@@ -468,22 +434,21 @@ export const MatchTerminal: React.FC = () => {
         </div>
 
         {/* Row 3: Sport Navigation Tabs */}
-        <nav className="sport-tabs-bar">
-          {[
-            { id: 'all', label: '전체', icon: null },
-            { id: 'soccer', label: '축구', icon: '⚽' },
-          ].map(tab => (
+        <nav className="sport-tabs-bar" aria-label="리그 범위">
+          {LEAGUE_SCOPES.map(tab => (
             <button 
               key={tab.id}
-              className={`sport-tab-btn ${selectedSport === tab.id && !showOnlyValueBets ? 'active' : ''}`}
+              className={`sport-tab-btn ${leagueScope === tab.id ? 'active' : ''}`}
+              aria-pressed={leagueScope === tab.id}
               onClick={() => {
-                setSelectedSport(tab.id);
+                setLeagueScope(tab.id);
+                setSelectedLeague('all');
                 setShowOnlyValueBets(false); // Disable recommendation-only filter when clicking tab
                 setActiveTab('home');
               }}
             >
-              {tab.icon && <span className="sport-icon">{tab.icon}</span>}
               {tab.label}
+              {!loadingMatches && !dataError && <span className="scope-count">{matches.filter(m=>inLeagueScope(m,tab.id)).length}</span>}
             </button>
           ))}
         </nav>
@@ -497,12 +462,24 @@ export const MatchTerminal: React.FC = () => {
               <span className="section-title">
                 {showOnlyValueBets ? 'AI 추천 분석 매치' : searchQuery ? `'${searchQuery}' 검색 결과` : `오늘부터 8일간 일정`}
               </span>
-              {(showOnlyValueBets || searchQuery) && (
-                <span className="section-link reset" onClick={resetToHome}>필터 해제</span>
+              {(selectedLeague !== 'all' || searchQuery) && (
+                <button type="button" className="section-link reset" onClick={() => {setSelectedLeague('all');setSearchQuery('');}}>필터 해제</button>
               )}
             </div>
 
-            {matches.some(match => match.oddsUnavailableReason === 'FETCH_FAILED') && (
+            <div className="league-filter-panel">
+              <label htmlFor="league-select">리그 선택</label>
+              <select id="league-select" value={selectedLeague} disabled={loadingMatches || !!dataError}
+                onChange={e=>setSelectedLeague(e.target.value)}>
+                <option value="all">{leagueScope==='kleague'?'K리그 전체':leagueScope==='international'?'해외·국제 전체':'모든 리그'}</option>
+                {availableLeagues.map(option=><option key={option.value} value={option.value}>{option.label} ({option.count})</option>)}
+              </select>
+              <p className="schedule-note">한국시간 기준 · {leagueScope==='all'?'날짜별 K리그 우선 표시':'오늘부터 8일간 수집된 일정'}</p>
+              {!loadingMatches && !dataError && <p className="filtered-count" role="status">{filteredMatches.length}경기 표시</p>}
+              <p className="research-note">경기 일정·배당을 확인하는 화면입니다. 연구용 예측과 평가 기록은 ‘분석’에서 확인하세요.</p>
+            </div>
+
+            {filteredMatches.some(match => match.oddsUnavailableReason === 'FETCH_FAILED') && (
               <div role="status" style={{ padding: '12px 16px', color: '#e2c48d', fontSize: 13 }}>
                 일부 날짜의 배당을 가져오지 못했습니다. 정상 조회된 배당은 표시됩니다.
                 <button onClick={() => window.location.reload()} style={{ marginLeft: 8, color: 'inherit', background: 'transparent', border: '1px solid currentColor', borderRadius: 6, padding: '4px 8px', cursor: 'pointer' }}>다시 조회</button>
@@ -540,6 +517,7 @@ export const MatchTerminal: React.FC = () => {
                             <span className="league-name">{sportEmoji} {getLeagueNameKorean(match.league, match.rawIds?.leagueId)}</span>
                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                               <button 
+                                aria-label={`${match.teams.home} 대 ${match.teams.away} 관심 경기 ${bookmarkedIds.has(match.id)?'해제':'저장'}`}
                                 className="bookmark-btn" 
                                 onClick={(e) => toggleBookmark(match, e)}
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
@@ -547,17 +525,17 @@ export const MatchTerminal: React.FC = () => {
                                 <Heart size={18} color={bookmarkedIds.has(match.id) ? '#ff3d00' : '#666'} fill={bookmarkedIds.has(match.id) ? '#ff3d00' : 'none'} />
                               </button>
                               <div className="decision-pill-badge pending">
-                                {'예측 모델 검증 대기'}
+                                {fixtureStatusLabel(match.fixtureStatus)}
 
                               </div>
                             </div>
                           </div>
 
-                          <div className="card-teams-row">
+                          <button type="button" className="card-teams-row" aria-label={`${getLeagueNameKorean(match.league,match.rawIds?.leagueId)} ${match.teams.home} 대 ${match.teams.away} 상세 보기`}>
                             <span className="team-name">{match.teams.home}</span>
                             <span className="vs-divider">VS</span>
                             <span className="team-name">{match.teams.away}</span>
-                          </div>
+                          </button>
 
                           <div className="card-footer-row">
                             <span className="match-time-label">{formattedTime}</span>
@@ -578,6 +556,7 @@ export const MatchTerminal: React.FC = () => {
                               </div>
                             )}
                           </div>
+                          {oddsAvailabilityMessage(match) && <p className="odds-help">{oddsAvailabilityMessage(match)}</p>}
                         </div>
                       );
                     })}
@@ -586,8 +565,11 @@ export const MatchTerminal: React.FC = () => {
               ) : (
                 <div className="no-matches-screen">
                   <Flame size={40} className="no-match-glow-icon" />
-                  <p className="no-match-primary">{loadingMatches ? '경기 데이터 조회 중' : dataError || '해당 기간 경기가 없습니다'}</p>
-                  <span className="no-match-sub">경기 조회와 예측 분석의 제공 상태는 별도로 표시됩니다.</span>
+                  <p className="no-match-primary">{loadingMatches ? '경기 데이터 조회 중' : dataError || (searchQuery || selectedLeague!=='all' ? '선택한 조건에 맞는 경기가 없습니다' : leagueScope==='kleague'?'조회 기간에 K리그 경기가 없습니다':'조회 기간에 경기가 없습니다')}</p>
+                  <span className="no-match-sub">{loadingMatches?'일정과 배당을 확인하고 있습니다.':dataError?'잠시 후 다시 조회해 주세요.':'필터를 바꾸거나 다른 리그의 일정을 확인해 보세요.'}</span>
+                  {!loadingMatches && (dataError
+                    ? <button className="empty-action" onClick={()=>window.location.reload()}>다시 조회</button>
+                    : <button className="empty-action" onClick={showAllLeagues}>전체 리그 보기</button>)}
                 </div>
               )}
             </div>
@@ -606,10 +588,12 @@ export const MatchTerminal: React.FC = () => {
               {selectedMatch.id && (
                 <div className="metric-box-card">
                   <p>경기 출처: {selectedMatch.dataSource || '미확인'}</p>
-                  <p>경기 상태: {selectedMatch.fixtureStatus || '미확인'}</p>
+                  <p>리그: {getLeagueNameKorean(selectedMatch.league,selectedMatch.rawIds?.leagueId)}</p>
+                  <p>경기 상태: {fixtureStatusLabel(selectedMatch.fixtureStatus)}</p>
                   <p>수집 시각: {selectedMatch.fetchedAt ? new Date(selectedMatch.fetchedAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) : '미확인'} (한국시간)</p>
                   <p>배당 출처: {selectedMatch.bookmaker || '미수집'}</p>
                   <p>승 {formatOdds(selectedMatch.odds.win)} / 무 {formatOdds(selectedMatch.odds.draw)} / 패 {formatOdds(selectedMatch.odds.loss)}</p>
+                  {oddsAvailabilityMessage(selectedMatch) && <p>{oddsAvailabilityMessage(selectedMatch)}</p>}
                   <p>해외 배당은 국내 구매 배당과 다를 수 있습니다.</p>
                 </div>
               )}
@@ -873,7 +857,8 @@ export const MatchTerminal: React.FC = () => {
           color: #ffffff;
           max-width: 480px;
           margin: 0 auto;
-          height: 100vh; /* Locked Viewport Height */
+          height: 100vh;
+          height: 100dvh; /* Follow the visible mobile viewport. */
           overflow: hidden; /* Prevent Global Scrolling */
           display: flex;
           flex-direction: column;
@@ -905,6 +890,7 @@ export const MatchTerminal: React.FC = () => {
           border-bottom: 1px solid rgba(255, 255, 255, 0.02);
         }
         .header-logo {
+          border: 0; background: transparent; padding: 0;
           font-size: 1.2rem;
           font-weight: 900;
           letter-spacing: -0.03em;
@@ -1064,6 +1050,23 @@ export const MatchTerminal: React.FC = () => {
           font-size: 0.9rem;
         }
 
+        .search-toggle { border: 0; padding: 10px; background: transparent; color: inherit; cursor: pointer; }
+        .card-teams-row { border: 0; background: transparent; padding: 0; text-align: left; min-height: 44px; cursor: pointer; width: 100%; }
+        .scope-count { margin-left: 6px; font-size: 12px; opacity: .8; }
+        .league-filter-panel { padding: 6px 20px 16px; }
+        .league-filter-panel label { display: block; color: #b9c7c0; font-size: 13px; margin-bottom: 8px; }
+        .league-filter-panel select { width: 100%; min-height: 44px; padding: 10px 12px; background: #161d19; border: 1px solid #3b4d42; border-radius: 10px; color: #fff; font-size: 15px; }
+        .schedule-note, .filtered-count, .research-note, .odds-help { font-size: 13px; line-height: 1.6; color: #aebbb4; margin: 8px 0 0; }
+        .filtered-count { color: #00e676; font-weight: 700; }
+        .research-note { color: #b9c7d5; }
+        .empty-action { border: 1px solid #455a4c; background: #16241b; color: #a8f5c6; padding: 10px 16px; border-radius: 8px; margin-top: 16px; cursor: pointer; }
+        .m-match-card:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid #00e676; outline-offset: 3px; }
+        @media (max-width: 380px) {
+          .m-match-card { padding: 14px; }
+          .card-header-row { flex-wrap: wrap; gap: 10px; }
+          .card-footer-row { flex-wrap: wrap; gap: 10px; }
+          .card-teams-row { flex-wrap: wrap; font-size: 1rem; }
+        }
         /* App Body Scroll Content (Strict Height Locked Scroll Area) */
         .app-body-content {
           flex: 1;
