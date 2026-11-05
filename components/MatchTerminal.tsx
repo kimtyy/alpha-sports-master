@@ -2,6 +2,7 @@
 
 import { LEAGUE_SCOPES, type LeagueScope, leagueLabel as getLeagueNameKorean, inLeagueScope, leagueOptions, filterMatches, compareMatchSchedule, fixtureStatusLabel, oddsAvailabilityMessage } from '@/lib/match-filters';
 import EvaluationPanel from './EvaluationPanel';
+import MatchDecision from './MatchDecision';
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -578,13 +579,9 @@ export const MatchTerminal: React.FC = () => {
 
         {activeTab === 'analysis' && (
           <div className="analysis-view-wrapper">
-            <EvaluationPanel />
             <div className="details-card-container">
               <h2 className="analysis-teams-title">{selectedMatch.id ? `${selectedMatch.teams.home} vs ${selectedMatch.teams.away}` : '선택된 경기가 없습니다'}</h2>
-              <div className="recommendation-banner skip">
-                <div className="banner-title">예측 제공 준비 중</div>
-                <p className="banner-desc">검증된 예측 모델이 연결되기 전까지 예상 스코어, 승률, 신뢰도 및 추천 금액을 제공하지 않습니다.</p>
-              </div>
+              {selectedMatch.id && <MatchDecision key={`${selectedMatch.id}:${selectedMatch.startTime}`} match={selectedMatch} />}
               {selectedMatch.id && (
                 <div className="metric-box-card">
                   <p>경기 출처: {selectedMatch.dataSource || '미확인'}</p>
@@ -598,6 +595,7 @@ export const MatchTerminal: React.FC = () => {
                 </div>
               )}
             </div>
+            <EvaluationPanel />
           </div>
         )}
 
